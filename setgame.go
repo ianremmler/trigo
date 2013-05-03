@@ -1,0 +1,154 @@
+package setgame
+
+import (
+	"fmt"
+	"math/rand"
+)
+
+type Card struct {
+	Attribs []int
+}
+
+type SetGame struct {
+	numAttribs    int
+	numAttribVals int
+	fieldExpand   int
+	cards         []Card
+	deck          []int
+	field         []int
+}
+
+func NewStd() *SetGame {
+	return New(4, 3, 12, 3)
+}
+
+func New(numAttribs, numAttribVals, fieldSize, fieldExpand int) *SetGame {
+	numCards := 1
+	for i := 0; i < numAttribs; i++ {
+		numCards *= numAttribVals
+	}
+	s := &SetGame{
+		numAttribs:    numAttribs,
+		numAttribVals: numAttribVals,
+		fieldExpand:   fieldExpand,
+		cards:         make([]Card, numCards),
+		deck:          make([]int, numCards),
+		field:         make([]int, fieldSize),
+	}
+	for i := range s.cards {
+		s.cards[i].Attribs = make([]int, numAttribs)
+	}
+	for i := range s.field {
+		s.field[i] = -1
+	}
+	s.genCards()
+	s.Shuffle()
+	return s
+}
+
+func (s *SetGame) genCards() {
+	for i := range s.cards {
+		div := 1
+		for j := range s.cards[0].Attribs {
+			s.cards[i].Attribs[j] = (i / div) % s.numAttribVals
+			div *= s.numAttribVals
+		}
+	}
+}
+
+func (s *SetGame) Card(idx int) *Card {
+	if idx < 0 || idx >= len(s.cards) {
+		return nil
+	}
+	card := s.cards[idx]
+	return &card
+}
+
+func (s *SetGame) Shuffle() {
+	s.deck = rand.Perm(len(s.deck))
+}
+
+func (s *SetGame) Deal() {
+	for i, idx := range s.field {
+		if idx == -1 {
+			if len(s.deck) == 0 {
+				break
+			}
+			s.field[i] = s.deck[0]
+			s.deck = s.deck[1:]
+		}
+	}
+}
+
+func (s *SetGame) Field() []Card {
+// 	fmt.Println(s.field)
+// 	fmt.Println(s.cards)
+	field := make([]Card, len(s.field))
+	for i, idx := range s.field {
+		field[i] = s.cards[idx]
+	}
+	return field
+}
+
+func (s *SetGame) IsSet(cardIdx ...int) bool {
+	if len(cardIdx) != s.numAttribVals {
+		return false
+	}
+	attribCk := make([]map[int]struct{}, s.numAttribs)
+	for i := range attribCk {
+		attribCk[i] = map[int]struct{}{}
+	}
+	for _, idx := range cardIdx {
+		if idx >= 0 && idx < len(s.cards) {
+			card := &s.cards[idx]
+// 			fmt.Println(card)
+			for j, val := range card.Attribs {
+				attribCk[j][val] = struct{}{}
+			}
+		}
+	}
+	for _, attrib := range attribCk {
+// 		fmt.Println(len(attrib))
+		if len(attrib) != 1 && len(attrib) != s.numAttribVals {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *SetGame) NumSets() int {
+	numSets := 0
+	combinations(len(s.field), s.numAttribVals, func(combo []int) {
+		candidate := make([]int, s.numAttribVals)
+		for i, idx := range combo {
+			candidate[i] = s.field[idx]
+		}
+		if s.IsSet(candidate...) {
+			fmt.Println("set!")
+			for _, idx := range candidate {
+				fmt.Println(s.cards[idx])
+			}
+			numSets++
+		}
+	})
+	return numSets
+}
+
+// stolen from rosetta code
+func combinations(n, m int, emit func([]int)) {
+	s := make([]int, m)
+	last := m - 1
+	var rc func(int, int)
+	rc = func(i, next int) {
+		for j := next; j < n; j++ {
+			s[i] = j
+			if i == last {
+				emit(s)
+			} else {
+				rc(i+1, j+1)
+			}
+		}
+		return
+	}
+	rc(0, 0)
+}
