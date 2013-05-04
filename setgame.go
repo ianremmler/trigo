@@ -1,7 +1,6 @@
 package setgame
 
 import (
-	"fmt"
 	"math/rand"
 )
 
@@ -38,9 +37,6 @@ func New(numAttribs, numAttribVals, fieldSize, fieldExpand int) *SetGame {
 	for i := range s.cards {
 		s.cards[i].Attribs = make([]int, numAttribs)
 	}
-	for i := range s.field {
-		s.field[i] = -1
-	}
 	s.genCards()
 	s.Shuffle()
 	return s
@@ -65,7 +61,18 @@ func (s *SetGame) Card(idx int) *Card {
 }
 
 func (s *SetGame) Shuffle() {
-	s.deck = rand.Perm(len(s.deck))
+	s.deck = rand.Perm(len(s.cards))
+	for i := range s.field {
+		s.field[i] = -1
+	}
+}
+
+func (s *SetGame) Remove(list ...int) {
+	for _, idx := range list {
+		if idx >= 0 && idx < len(s.field) {
+			s.field[idx] = -1
+		}
+	}
 }
 
 func (s *SetGame) Deal() {
@@ -81,8 +88,6 @@ func (s *SetGame) Deal() {
 }
 
 func (s *SetGame) Field() []Card {
-// 	fmt.Println(s.field)
-// 	fmt.Println(s.cards)
 	field := make([]Card, len(s.field))
 	for i, idx := range s.field {
 		field[i] = s.cards[idx]
@@ -101,14 +106,12 @@ func (s *SetGame) IsSet(cardIdx ...int) bool {
 	for _, idx := range cardIdx {
 		if idx >= 0 && idx < len(s.cards) {
 			card := &s.cards[idx]
-// 			fmt.Println(card)
 			for j, val := range card.Attribs {
 				attribCk[j][val] = struct{}{}
 			}
 		}
 	}
 	for _, attrib := range attribCk {
-// 		fmt.Println(len(attrib))
 		if len(attrib) != 1 && len(attrib) != s.numAttribVals {
 			return false
 		}
@@ -124,10 +127,6 @@ func (s *SetGame) NumSets() int {
 			candidate[i] = s.field[idx]
 		}
 		if s.IsSet(candidate...) {
-			fmt.Println("set!")
-			for _, idx := range candidate {
-				fmt.Println(s.cards[idx])
-			}
 			numSets++
 		}
 	})
