@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	colors = []string{"@r", "@b", "@m"}
+	colors = []string{"@r", "@g", "@m"}
 	shapes = [][]string{
 		{"□", "▣", "■"},
 		{"○", "◉", "●"},
@@ -23,10 +23,11 @@ var (
 func TestSetGame(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	set := setgame.NewStd()
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 5; i++ {
 		set.Shuffle()
 		set.Deal()
-		fmt.Println(set.NumSets())
+		printField(set.Field())
+		fmt.Println()
 	}
 }
 

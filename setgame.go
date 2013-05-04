@@ -1,6 +1,7 @@
 package setgame
 
 import (
+	"math"
 	"math/rand"
 )
 
@@ -11,6 +12,7 @@ type Card struct {
 type SetGame struct {
 	numAttribs    int
 	numAttribVals int
+	fieldSize     int
 	fieldExpand   int
 	cards         []Card
 	deck          []int
@@ -29,6 +31,7 @@ func New(numAttribs, numAttribVals, fieldSize, fieldExpand int) *SetGame {
 	s := &SetGame{
 		numAttribs:    numAttribs,
 		numAttribVals: numAttribVals,
+		fieldSize:     fieldSize,
 		fieldExpand:   fieldExpand,
 		cards:         make([]Card, numCards),
 		deck:          make([]int, numCards),
@@ -62,6 +65,7 @@ func (s *SetGame) Card(idx int) *Card {
 
 func (s *SetGame) Shuffle() {
 	s.deck = rand.Perm(len(s.cards))
+	s.field = make([]int, s.fieldSize)
 	for i := range s.field {
 		s.field[i] = -1
 	}
@@ -75,9 +79,31 @@ func (s *SetGame) Remove(list ...int) {
 	}
 }
 
+func (s *SetGame) TidyField() {
+	numExtra := len(s.field) - s.fieldSize
+	for i, extraIdx := range s.field[s.fieldSize:] {
+		if extraIdx >= 0 {
+			for j, idx := range s.field[:s.fieldSize] {
+				if idx < 0 {
+					s.field[j] = extraIdx
+					s.field[i] = -1
+					numExtra--
+					break
+				}
+			}
+		} else {
+			numExtra--
+		}
+	}
+	expand := float64(s.fieldExpand)
+	numExtra = int(math.Ceil(float64(numExtra) / expand) * expand)
+	s.field = s.field[:s.fieldSize + numExtra]
+}
+
 func (s *SetGame) Deal() {
+	s.TidyField()
 	for i, idx := range s.field {
-		if idx == -1 {
+		if idx < 0 {
 			if len(s.deck) == 0 {
 				break
 			}
