@@ -49,7 +49,7 @@ func newGame() {
 		}
 		if set.IsSet(candidate) {
 			fmt.Println("\nset!\n")
-			set.Remove(candidate...)
+			set.Remove(candidate)
 			set.Deal()
 		} else {
 			fmt.Println("\nsorry...\n")

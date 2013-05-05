@@ -56,12 +56,18 @@ func (s *SetGame) genCards() {
 	}
 }
 
-func (s *SetGame) Card(idx int) *Card {
+func (s *SetGame) Card(idx int) Card {
 	if idx < 0 || idx >= len(s.cards) {
-		return nil
+		return Card{Blank: true}
 	}
-	card := s.cards[idx]
-	return &card
+	return s.cards[idx]
+}
+
+func (s *SetGame) FieldCard(fieldIdx int) Card {
+	if fieldIdx < 0 || fieldIdx >= len(s.field) {
+		return Card{Blank: true}
+	}
+	return s.Card(fieldIdx)
 }
 
 func (s *SetGame) Shuffle() {
@@ -72,8 +78,11 @@ func (s *SetGame) Shuffle() {
 	}
 }
 
-func (s *SetGame) Remove(list ...int) {
-	for _, idx := range list {
+func (s *SetGame) Remove(set []int) {
+	if len(set) != s.numAttribVals {
+		return
+	}
+	for _, idx := range set {
 		if idx >= 0 && idx < len(s.field) {
 			s.field[idx] = -1
 		}
@@ -91,22 +100,22 @@ func (s *SetGame) expandField() {
 func (s *SetGame) tidyField() {
 	numExtra := len(s.field) - s.fieldSize
 	for i, extraIdx := range s.field[s.fieldSize:] {
-		if extraIdx >= 0 {
-			for j, idx := range s.field[:s.fieldSize] {
-				if idx < 0 {
-					s.field[j] = extraIdx
-					s.field[i] = -1
-					numExtra--
-					break
-				}
-			}
-		} else {
+		if extraIdx < 0 {
 			numExtra--
+			continue
+		}
+		for j, idx := range s.field[:s.fieldSize] {
+			if idx < 0 {
+				s.field[j] = extraIdx
+				s.field[s.fieldSize+i] = -1
+				numExtra--
+				break
+			}
 		}
 	}
 	expand := float64(s.fieldExpand)
-	numExtra = int(math.Ceil(float64(numExtra) / expand) * expand)
-	s.field = s.field[:s.fieldSize + numExtra]
+	numExtra = int(math.Ceil(float64(numExtra)/expand) * expand)
+	s.field = s.field[:s.fieldSize+numExtra]
 }
 
 func (s *SetGame) addCards() {
@@ -187,19 +196,18 @@ func (s *SetGame) NumSets() int {
 
 // stolen from rosetta code
 func combinations(n, m int, emit func([]int)) {
-	s := make([]int, m)
-	last := m - 1
-	var rc func(int, int)
-	rc = func(i, next int) {
-		for j := next; j < n; j++ {
-			s[i] = j
-			if i == last {
-				emit(s)
+	out := make([]int, m)
+	var recurse func(int, int)
+	recurse = func(idx, first int) {
+		for i := first; i < n; i++ {
+			out[idx] = i
+			if idx == m - 1 {
+				emit(out)
 			} else {
-				rc(i+1, j+1)
+				recurse(idx+1, i+1)
 			}
 		}
 		return
 	}
-	rc(0, 0)
+	recurse(0, 0)
 }
