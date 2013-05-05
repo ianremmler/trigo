@@ -67,7 +67,7 @@ func (s *SetGame) FieldCard(i int) Card {
 	if i < 0 || i >= len(s.field) {
 		return Card{Blank: true}
 	}
-	return s.Card(i)
+	return s.Card(s.field[i])
 }
 
 func (s *SetGame) Shuffle() {

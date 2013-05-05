@@ -44,17 +44,37 @@ func newGame() {
 			continue
 		}
 		candidate := make([]int, 3)
-		for i := 0; i < 3; i++ {
+		for i := range candidate {
 			candidate[i] = int(str[i]) - 'a'
 		}
+
+		fmt.Println()
+		for _, c := range candidate {
+			fmt.Printf("%s ", printCard(c))
+		}
 		if set.IsSet(candidate) {
-			fmt.Println("\nset!\n")
+			fmt.Println("is a set!\n")
 			set.Remove(candidate)
 			set.Deal()
 		} else {
-			fmt.Println("\nsorry...\n")
+			fmt.Println("is not a set.\n")
 		}
 	}
+}
+
+func printCard(i int) string {
+	card := set.FieldCard(i)
+	str := ""
+	if card.Blank {
+		str = "[       ]"
+	} else {
+		num, clr, shp, fil := card.Attr[0], card.Attr[1], card.Attr[2], card.Attr[3]
+		shapeStr := strings.Repeat(" "+shapes[shp][fil], num+1)
+		colorStr := colors[clr]
+		padStr := strings.Repeat(" ", 2-num)
+		str = "[" + padStr + colorStr + shapeStr + padStr + "@| ]"
+	}
+	return color.Sprint(str)
 }
 
 func printField() {
@@ -64,18 +84,7 @@ func printField() {
 		numCols := numCards / 3
 		f := (i*3)%numCards + (i / numCols)
 		tag := string(int('a') + f)
-		card := field[f]
-		str := ""
-		if card.Blank {
-			str = tag + ".[       ]"
-		} else {
-			num, clr, shp, fil := card.Attr[0], card.Attr[1], card.Attr[2], card.Attr[3]
-			shapeStr := strings.Repeat(" "+shapes[shp][fil], num+1)
-			colorStr := colors[clr]
-			padStr := strings.Repeat(" ", 2-num)
-			str = tag + ".[" + padStr + colorStr + shapeStr + padStr + "@| ]"
-		}
-		color.Print(str)
+		fmt.Printf("%s.%s", tag, printCard(f))
 		if (i+1)%numCols == 0 {
 			fmt.Println()
 		} else {
