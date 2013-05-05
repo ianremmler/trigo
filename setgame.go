@@ -6,40 +6,40 @@ import (
 )
 
 type Card struct {
-	Attribs []int
-	Blank   bool
+	Attr  []int
+	Blank bool
 }
 
 type SetGame struct {
-	numAttribs    int
-	numAttribVals int
-	fieldSize     int
-	fieldExpand   int
-	cards         []Card
-	deck          []int
-	field         []int
+	numAttrs    int
+	numAttrVals int
+	fieldSize   int
+	fieldExpand int
+	cards       []Card
+	deck        []int
+	field       []int
 }
 
 func NewStd() *SetGame {
 	return New(4, 3, 12, 3)
 }
 
-func New(numAttribs, numAttribVals, fieldSize, fieldExpand int) *SetGame {
+func New(numAttrs, numAttrVals, fieldSize, fieldExpand int) *SetGame {
 	numCards := 1
-	for i := 0; i < numAttribs; i++ {
-		numCards *= numAttribVals
+	for i := 0; i < numAttrs; i++ {
+		numCards *= numAttrVals
 	}
 	s := &SetGame{
-		numAttribs:    numAttribs,
-		numAttribVals: numAttribVals,
-		fieldSize:     fieldSize,
-		fieldExpand:   fieldExpand,
-		cards:         make([]Card, numCards),
-		deck:          make([]int, numCards),
-		field:         make([]int, fieldSize),
+		numAttrs:    numAttrs,
+		numAttrVals: numAttrVals,
+		fieldSize:   fieldSize,
+		fieldExpand: fieldExpand,
+		cards:       make([]Card, numCards),
+		deck:        make([]int, numCards),
+		field:       make([]int, fieldSize),
 	}
 	for i := range s.cards {
-		s.cards[i].Attribs = make([]int, numAttribs)
+		s.cards[i].Attr = make([]int, numAttrs)
 	}
 	s.genCards()
 	s.Shuffle()
@@ -49,25 +49,25 @@ func New(numAttribs, numAttribVals, fieldSize, fieldExpand int) *SetGame {
 func (s *SetGame) genCards() {
 	for i := range s.cards {
 		div := 1
-		for j := range s.cards[0].Attribs {
-			s.cards[i].Attribs[j] = (i / div) % s.numAttribVals
-			div *= s.numAttribVals
+		for j := range s.cards[0].Attr {
+			s.cards[i].Attr[j] = (i / div) % s.numAttrVals
+			div *= s.numAttrVals
 		}
 	}
 }
 
-func (s *SetGame) Card(idx int) Card {
-	if idx < 0 || idx >= len(s.cards) {
+func (s *SetGame) Card(i int) Card {
+	if i < 0 || i >= len(s.cards) {
 		return Card{Blank: true}
 	}
-	return s.cards[idx]
+	return s.cards[i]
 }
 
-func (s *SetGame) FieldCard(fieldIdx int) Card {
-	if fieldIdx < 0 || fieldIdx >= len(s.field) {
+func (s *SetGame) FieldCard(i int) Card {
+	if i < 0 || i >= len(s.field) {
 		return Card{Blank: true}
 	}
-	return s.Card(fieldIdx)
+	return s.Card(i)
 }
 
 func (s *SetGame) Shuffle() {
@@ -79,34 +79,34 @@ func (s *SetGame) Shuffle() {
 }
 
 func (s *SetGame) Remove(set []int) {
-	if len(set) != s.numAttribVals {
+	if len(set) != s.numAttrVals {
 		return
 	}
-	for _, idx := range set {
-		if idx >= 0 && idx < len(s.field) {
-			s.field[idx] = -1
+	for _, i := range set {
+		if i >= 0 && i < len(s.field) {
+			s.field[i] = -1
 		}
 	}
 }
 
 func (s *SetGame) expandField() {
-	exp := make([]int, s.fieldExpand)
-	for i := range exp {
-		exp[i] = -1
+	expand := make([]int, s.fieldExpand)
+	for i := range expand {
+		expand[i] = -1
 	}
-	s.field = append(s.field, exp...)
+	s.field = append(s.field, expand...)
 }
 
 func (s *SetGame) tidyField() {
 	numExtra := len(s.field) - s.fieldSize
-	for i, extraIdx := range s.field[s.fieldSize:] {
-		if extraIdx < 0 {
+	for i, e := range s.field[s.fieldSize:] {
+		if e < 0 {
 			numExtra--
 			continue
 		}
-		for j, idx := range s.field[:s.fieldSize] {
-			if idx < 0 {
-				s.field[j] = extraIdx
+		for j, c := range s.field[:s.fieldSize] {
+			if c < 0 {
+				s.field[j] = e
 				s.field[s.fieldSize+i] = -1
 				numExtra--
 				break
@@ -119,8 +119,8 @@ func (s *SetGame) tidyField() {
 }
 
 func (s *SetGame) addCards() {
-	for i, idx := range s.field {
-		if idx < 0 {
+	for i, c := range s.field {
+		if c < 0 {
 			if len(s.deck) == 0 {
 				break
 			}
@@ -141,39 +141,39 @@ func (s *SetGame) Deal() {
 
 func (s *SetGame) Field() []Card {
 	field := make([]Card, len(s.field))
-	for i, idx := range s.field {
-		if idx < 0 {
+	for i, c := range s.field {
+		if c < 0 {
 			field[i] = Card{Blank: true}
 		} else {
-			field[i] = s.cards[idx]
+			field[i] = s.cards[c]
 		}
 	}
 	return field
 }
 
 func (s *SetGame) IsSet(candidate []int) bool {
-	if len(candidate) != s.numAttribVals {
+	if len(candidate) != s.numAttrVals {
 		return false
 	}
-	attribCk := make([]map[int]struct{}, s.numAttribs)
-	for i := range attribCk {
-		attribCk[i] = map[int]struct{}{}
+	attrCheck := make([]map[int]struct{}, s.numAttrs)
+	for i := range attrCheck {
+		attrCheck[i] = map[int]struct{}{}
 	}
-	for _, idx := range candidate {
-		if idx < 0 || idx >= len(s.field) {
+	for _, f := range candidate {
+		if f < 0 || f >= len(s.field) {
 			return false
 		}
-		fieldIdx := s.field[idx]
-		if fieldIdx < 0 || fieldIdx >= len(s.cards) {
+		c := s.field[f]
+		if c < 0 || c >= len(s.cards) {
 			return false
 		}
-		card := &s.cards[fieldIdx]
-		for j, val := range card.Attribs {
-			attribCk[j][val] = struct{}{}
+		card := &s.cards[c]
+		for j, val := range card.Attr {
+			attrCheck[j][val] = struct{}{}
 		}
 	}
-	for _, attrib := range attribCk {
-		if len(attrib) != 1 && len(attrib) != s.numAttribVals {
+	for _, attr := range attrCheck {
+		if len(attr) != 1 && len(attr) != s.numAttrVals {
 			return false
 		}
 	}
@@ -182,32 +182,23 @@ func (s *SetGame) IsSet(candidate []int) bool {
 
 func (s *SetGame) NumSets() int {
 	numSets := 0
-	combinations(len(s.field), s.numAttribVals, func(combo []int) {
-		candidate := make([]int, s.numAttribVals)
-		for i, idx := range combo {
-			candidate[i] = idx
-		}
-		if s.IsSet(candidate) {
-			numSets++
-		}
-	})
-	return numSets
-}
+	candidate := make([]int, s.numAttrVals)
 
-// stolen from rosetta code
-func combinations(n, m int, emit func([]int)) {
-	out := make([]int, m)
 	var recurse func(int, int)
-	recurse = func(idx, first int) {
-		for i := first; i < n; i++ {
-			out[idx] = i
-			if idx == m - 1 {
-				emit(out)
+	recurse = func(i, n int) {
+		for j := n; j < len(s.field); j++ {
+			candidate[i] = j
+			if i == s.numAttrVals-1 {
+				if s.IsSet(candidate) {
+					numSets++
+				}
 			} else {
-				recurse(idx+1, i+1)
+				recurse(i+1, j+1)
 			}
 		}
 		return
 	}
 	recurse(0, 0)
+
+	return numSets
 }
