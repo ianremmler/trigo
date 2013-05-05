@@ -7,6 +7,7 @@ import (
 
 type Card struct {
 	Attribs []int
+	Blank   bool
 }
 
 type SetGame struct {
@@ -79,7 +80,15 @@ func (s *SetGame) Remove(list ...int) {
 	}
 }
 
-func (s *SetGame) TidyField() {
+func (s *SetGame) expandField() {
+	exp := make([]int, s.fieldExpand)
+	for i := range exp {
+		exp[i] = -1
+	}
+	s.field = append(s.field, exp...)
+}
+
+func (s *SetGame) tidyField() {
 	numExtra := len(s.field) - s.fieldSize
 	for i, extraIdx := range s.field[s.fieldSize:] {
 		if extraIdx >= 0 {
@@ -100,8 +109,7 @@ func (s *SetGame) TidyField() {
 	s.field = s.field[:s.fieldSize + numExtra]
 }
 
-func (s *SetGame) Deal() {
-	s.TidyField()
+func (s *SetGame) addCards() {
 	for i, idx := range s.field {
 		if idx < 0 {
 			if len(s.deck) == 0 {
@@ -113,25 +121,38 @@ func (s *SetGame) Deal() {
 	}
 }
 
+func (s *SetGame) Deal() {
+	s.tidyField()
+	s.addCards()
+	if s.NumSets() == 0 && len(s.deck) > 0 {
+		s.expandField()
+		s.addCards()
+	}
+}
+
 func (s *SetGame) Field() []Card {
 	field := make([]Card, len(s.field))
 	for i, idx := range s.field {
-		field[i] = s.cards[idx]
+		if idx < 0 {
+			field[i] = Card{Blank: true}
+		} else {
+			field[i] = s.cards[idx]
+		}
 	}
 	return field
 }
 
-func (s *SetGame) IsSet(cardIdx ...int) bool {
-	if len(cardIdx) != s.numAttribVals {
+func (s *SetGame) IsSet(candidate []int) bool {
+	if len(candidate) != s.numAttribVals {
 		return false
 	}
 	attribCk := make([]map[int]struct{}, s.numAttribs)
 	for i := range attribCk {
 		attribCk[i] = map[int]struct{}{}
 	}
-	for _, idx := range cardIdx {
+	for _, idx := range candidate {
 		if idx >= 0 && idx < len(s.cards) {
-			card := &s.cards[idx]
+			card := &s.cards[s.field[idx]]
 			for j, val := range card.Attribs {
 				attribCk[j][val] = struct{}{}
 			}
@@ -150,9 +171,9 @@ func (s *SetGame) NumSets() int {
 	combinations(len(s.field), s.numAttribVals, func(combo []int) {
 		candidate := make([]int, s.numAttribVals)
 		for i, idx := range combo {
-			candidate[i] = s.field[idx]
+			candidate[i] = idx
 		}
-		if s.IsSet(candidate...) {
+		if s.IsSet(candidate) {
 			numSets++
 		}
 	})
