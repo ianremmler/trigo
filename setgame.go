@@ -151,11 +151,16 @@ func (s *SetGame) IsSet(candidate []int) bool {
 		attribCk[i] = map[int]struct{}{}
 	}
 	for _, idx := range candidate {
-		if idx >= 0 && idx < len(s.cards) {
-			card := &s.cards[s.field[idx]]
-			for j, val := range card.Attribs {
-				attribCk[j][val] = struct{}{}
-			}
+		if idx < 0 || idx >= len(s.field) {
+			return false
+		}
+		fieldIdx := s.field[idx]
+		if fieldIdx < 0 || fieldIdx >= len(s.cards) {
+			return false
+		}
+		card := &s.cards[fieldIdx]
+		for j, val := range card.Attribs {
+			attribCk[j][val] = struct{}{}
 		}
 	}
 	for _, attrib := range attribCk {

@@ -6,6 +6,7 @@ import (
 
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 )
@@ -24,8 +25,6 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	set = setgame.NewStd()
 	newGame()
-	set.Remove(11)
-	printField()
 }
 
 func newGame() {
@@ -34,6 +33,10 @@ func newGame() {
 	str := ""
 	for {
 		printField()
+		if set.NumSets() == 0 {
+			fmt.Println("\nNo more sets.")
+			os.Exit(0)
+		}
 		fmt.Print("\n> ")
 		fmt.Scan(&str)
 		if len(str) < 3 {
@@ -64,13 +67,13 @@ func printField() {
 		card := field[idx]
 		str := ""
 		if card.Blank {
-			str = tag + " [       ]"
+			str = tag + ".[       ]"
 		} else {
 			num, clr, shp, fil := card.Attribs[0], card.Attribs[1], card.Attribs[2], card.Attribs[3]
 			shapeStr := strings.Repeat(" "+shapes[shp][fil], num+1)
 			colorStr := colors[clr]
 			padStr := strings.Repeat(" ", 2-num)
-			str = tag + " [" + padStr + colorStr + shapeStr + padStr + "@| ]"
+			str = tag + ".[" + padStr + colorStr + shapeStr + padStr + "@| ]"
 		}
 		color.Print(str)
 		if (i+1)%numCols == 0 {
