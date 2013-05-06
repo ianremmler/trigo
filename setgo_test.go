@@ -1,7 +1,7 @@
-package setgame_test
+package setgo_test
 
 import (
-	"github.com/ianremmler/setgame"
+	"github.com/ianremmler/setgo"
 	"github.com/wsxiaoys/terminal/color"
 
 	"fmt"
@@ -20,9 +20,9 @@ var (
 	}
 )
 
-func TestSetGame(t *testing.T) {
+func TestSetGo(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
-	set := setgame.NewStd()
+	set := setgo.NewStd()
 	for i := 0; i < 5; i++ {
 		set.Shuffle()
 		set.Deal()
@@ -31,7 +31,7 @@ func TestSetGame(t *testing.T) {
 	}
 }
 
-func printField(field []setgame.Card) {
+func printField(field []setgo.Card) {
 	for i := range field {
 		idx := (i * 3) % 12 + (i / 4)
 		card := field[idx]

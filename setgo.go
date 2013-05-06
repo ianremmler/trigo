@@ -1,4 +1,4 @@
-package setgame
+package setgo
 
 import (
 	"math"
@@ -10,7 +10,7 @@ type Card struct {
 	Blank bool
 }
 
-type SetGame struct {
+type SetGo struct {
 	numAttrs    int
 	numAttrVals int
 	fieldSize   int
@@ -20,16 +20,16 @@ type SetGame struct {
 	field       []int
 }
 
-func NewStd() *SetGame {
+func NewStd() *SetGo {
 	return New(4, 3, 12, 3)
 }
 
-func New(numAttrs, numAttrVals, fieldSize, fieldExpand int) *SetGame {
+func New(numAttrs, numAttrVals, fieldSize, fieldExpand int) *SetGo {
 	numCards := 1
 	for i := 0; i < numAttrs; i++ {
 		numCards *= numAttrVals
 	}
-	s := &SetGame{
+	s := &SetGo{
 		numAttrs:    numAttrs,
 		numAttrVals: numAttrVals,
 		fieldSize:   fieldSize,
@@ -46,7 +46,7 @@ func New(numAttrs, numAttrVals, fieldSize, fieldExpand int) *SetGame {
 	return s
 }
 
-func (s *SetGame) genCards() {
+func (s *SetGo) genCards() {
 	for i := range s.cards {
 		div := 1
 		for j := range s.cards[0].Attr {
@@ -56,21 +56,21 @@ func (s *SetGame) genCards() {
 	}
 }
 
-func (s *SetGame) Card(i int) Card {
+func (s *SetGo) Card(i int) Card {
 	if i < 0 || i >= len(s.cards) {
 		return Card{Blank: true}
 	}
 	return s.cards[i]
 }
 
-func (s *SetGame) FieldCard(i int) Card {
+func (s *SetGo) FieldCard(i int) Card {
 	if i < 0 || i >= len(s.field) {
 		return Card{Blank: true}
 	}
 	return s.Card(s.field[i])
 }
 
-func (s *SetGame) Shuffle() {
+func (s *SetGo) Shuffle() {
 	s.deck = rand.Perm(len(s.cards))
 	s.field = make([]int, s.fieldSize)
 	for i := range s.field {
@@ -78,7 +78,7 @@ func (s *SetGame) Shuffle() {
 	}
 }
 
-func (s *SetGame) Remove(set []int) {
+func (s *SetGo) Remove(set []int) {
 	if len(set) != s.numAttrVals {
 		return
 	}
@@ -89,7 +89,7 @@ func (s *SetGame) Remove(set []int) {
 	}
 }
 
-func (s *SetGame) expandField() {
+func (s *SetGo) expandField() {
 	expand := make([]int, s.fieldExpand)
 	for i := range expand {
 		expand[i] = -1
@@ -97,7 +97,7 @@ func (s *SetGame) expandField() {
 	s.field = append(s.field, expand...)
 }
 
-func (s *SetGame) tidyField() {
+func (s *SetGo) tidyField() {
 	numExtra := len(s.field) - s.fieldSize
 	for i, e := range s.field[s.fieldSize:] {
 		if e < 0 {
@@ -118,7 +118,7 @@ func (s *SetGame) tidyField() {
 	s.field = s.field[:s.fieldSize+numExtra]
 }
 
-func (s *SetGame) addCards() {
+func (s *SetGo) addCards() {
 	for i, c := range s.field {
 		if c < 0 {
 			if len(s.deck) == 0 {
@@ -130,7 +130,7 @@ func (s *SetGame) addCards() {
 	}
 }
 
-func (s *SetGame) Deal() {
+func (s *SetGo) Deal() {
 	s.tidyField()
 	s.addCards()
 	if s.NumSets() == 0 && len(s.deck) > 0 {
@@ -139,7 +139,7 @@ func (s *SetGame) Deal() {
 	}
 }
 
-func (s *SetGame) Field() []Card {
+func (s *SetGo) Field() []Card {
 	field := make([]Card, len(s.field))
 	for i, c := range s.field {
 		if c < 0 {
@@ -151,7 +151,7 @@ func (s *SetGame) Field() []Card {
 	return field
 }
 
-func (s *SetGame) IsSet(candidate []int) bool {
+func (s *SetGo) IsSet(candidate []int) bool {
 	if len(candidate) != s.numAttrVals {
 		return false
 	}
@@ -180,7 +180,7 @@ func (s *SetGame) IsSet(candidate []int) bool {
 	return true
 }
 
-func (s *SetGame) NumSets() int {
+func (s *SetGo) NumSets() int {
 	numSets := 0
 	candidate := make([]int, s.numAttrVals)
 

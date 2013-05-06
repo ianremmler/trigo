@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/ianremmler/setgame"
+	"github.com/ianremmler/setgo"
 	"github.com/wsxiaoys/terminal/color"
 
 	"fmt"
@@ -18,12 +18,12 @@ var (
 		{"○", "◉", "●"},
 		{"◇", "◈", "◆"},
 	}
-	set *setgame.SetGame
+	set *setgo.SetGo
 )
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	set = setgame.NewStd()
+	set = setgo.NewStd()
 	newGame()
 }
 
