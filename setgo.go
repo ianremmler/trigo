@@ -56,6 +56,10 @@ func (s *SetGo) genCards() {
 	}
 }
 
+func (s *SetGo) DeckSize() int {
+	return len(s.deck)
+}
+
 func (s *SetGo) Card(i int) Card {
 	if i < 0 || i >= len(s.cards) {
 		return Card{Blank: true}

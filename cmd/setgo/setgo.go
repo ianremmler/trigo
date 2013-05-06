@@ -18,6 +18,7 @@ var (
 		{"○", "◉", "●"},
 		{"◇", "◈", "◆"},
 	}
+	setsFound = 0
 	set *setgo.SetGo
 )
 
@@ -37,7 +38,7 @@ func newGame() {
 			fmt.Println("\nNo more sets.")
 			os.Exit(0)
 		}
-		fmt.Print("\n> ")
+		fmt.Printf("\n%02d sets found, %02d cards in deck> ", setsFound, set.DeckSize())
 		fmt.Scan(&str)
 		if len(str) < 3 {
 			fmt.Println("You must name 3 cards.")
@@ -53,6 +54,7 @@ func newGame() {
 			fmt.Printf("%s ", printCard(c))
 		}
 		if set.IsSet(candidate) {
+			setsFound++
 			fmt.Println("is a set!\n")
 			set.Remove(candidate)
 			set.Deal()
