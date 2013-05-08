@@ -159,10 +159,7 @@ func (s *SetGo) IsSet(candidate []int) bool {
 	if len(candidate) != s.numAttrVals {
 		return false
 	}
-	attrCheck := make([]map[int]struct{}, s.numAttrs)
-	for i := range attrCheck {
-		attrCheck[i] = map[int]struct{}{}
-	}
+	attrCheck := make([]int, s.numAttrs)
 	for _, f := range candidate {
 		if f < 0 || f >= len(s.field) {
 			return false
@@ -173,11 +170,13 @@ func (s *SetGo) IsSet(candidate []int) bool {
 		}
 		card := &s.cards[c]
 		for j, val := range card.Attr {
-			attrCheck[j][val] = struct{}{}
+			attrCheck[j] |= 1 << uint(val)
 		}
 	}
 	for _, attr := range attrCheck {
-		if len(attr) != 1 && len(attr) != s.numAttrVals {
+		allSame := (attr != 0) && (attr&(attr-1) == 0)
+		allDiff := (attr == 1<<uint(s.numAttrVals)-1)
+		if !allSame && !allDiff {
 			return false
 		}
 	}
