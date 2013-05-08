@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+const (
+	keys = "qazwsxedcrfvtgbyhn"
+)
+
 var (
 	colors = []string{"@r", "@g", "@m"}
 	shapes = [][]string{
@@ -46,7 +50,7 @@ func play() {
 		}
 		candidate := make([]int, 3)
 		for i := range candidate {
-			candidate[i] = int(str[i]) - 'a'
+			candidate[i] = strings.Index(keys, string(str[i]))
 		}
 
 		fmt.Println()
@@ -85,7 +89,10 @@ func printField() {
 		numCards := len(field)
 		numCols := numCards / 3
 		f := (i*3)%numCards + (i / numCols)
-		tag := string(int('a') + f)
+		tag := "?"
+		if f >= 0 && f < len(keys) {
+			tag = string(keys[f])
+		}
 		fmt.Printf("%s.%s", tag, printCard(f))
 		if (i+1)%numCols == 0 {
 			fmt.Println()
