@@ -25,10 +25,10 @@ var (
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	set = setgo.NewStd()
-	newGame()
+	play()
 }
 
-func newGame() {
+func play() {
 	set.Shuffle()
 	set.Deal()
 	str := ""
@@ -38,7 +38,7 @@ func newGame() {
 			fmt.Println("\nNo more sets.")
 			os.Exit(0)
 		}
-		fmt.Printf("\n%02d sets found, %02d cards in deck> ", setsFound, set.DeckSize())
+		fmt.Printf("\n[sets: %02d, deck: %02d] > ", setsFound, set.DeckSize())
 		fmt.Scan(&str)
 		if len(str) < 3 {
 			fmt.Println("You must name 3 cards.")
