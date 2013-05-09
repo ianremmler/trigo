@@ -23,7 +23,7 @@ var (
 		{"◇", "◈", "◆"},
 	}
 	setsFound = 0
-	set *setgo.SetGo
+	set       *setgo.SetGo
 )
 
 func main() {
@@ -35,7 +35,6 @@ func main() {
 func play() {
 	set.Shuffle()
 	set.Deal()
-	str := ""
 	for {
 		printField()
 		if set.NumSets() == 0 {
@@ -43,6 +42,7 @@ func play() {
 			os.Exit(0)
 		}
 		fmt.Printf("\n[sets: %02d, deck: %02d] > ", setsFound, set.DeckSize())
+		str := ""
 		fmt.Scan(&str)
 		if len(str) < 3 {
 			fmt.Println("You must name 3 cards.")
