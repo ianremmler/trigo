@@ -45,7 +45,7 @@ func play() {
 		str := ""
 		fmt.Scan(&str)
 		if len(str) < 3 {
-			fmt.Println("You must name 3 cards.")
+			fmt.Println("\nYou must enter 3 cards.\n")
 			continue
 		}
 		candidate := make([]int, 3)
