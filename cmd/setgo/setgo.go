@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/ianremmler/setgo"
+	"github.com/wsxiaoys/terminal"
 	"github.com/wsxiaoys/terminal/color"
 
 	"fmt"
@@ -35,6 +36,10 @@ func main() {
 func play() {
 	set.Shuffle()
 	set.Deal()
+
+	terminal.Stdout.Clear()
+	terminal.Stdout.Move(0, 0)
+
 	for {
 		printField()
 		if set.NumSets() == 0 {
@@ -44,16 +49,18 @@ func play() {
 		fmt.Printf("\n[sets: %02d, deck: %02d] > ", setsFound, set.DeckSize())
 		str := ""
 		fmt.Scan(&str)
+
+		terminal.Stdout.Clear()
+		terminal.Stdout.Move(0, 0)
+
 		if len(str) < 3 {
-			fmt.Println("\nYou must enter 3 cards.\n")
+			fmt.Println("You must enter 3 cards.\n")
 			continue
 		}
 		candidate := make([]int, 3)
 		for i := range candidate {
 			candidate[i] = strings.Index(keys, string(str[i]))
 		}
-
-		fmt.Println()
 		for _, c := range candidate {
 			fmt.Printf("%s ", printCard(c))
 		}
