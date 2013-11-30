@@ -7,7 +7,6 @@ import (
 
 	"fmt"
 	"math/rand"
-	"os"
 	"strings"
 	"time"
 )
@@ -39,13 +38,10 @@ func play() {
 
 	terminal.Stdout.Clear()
 	terminal.Stdout.Move(0, 0)
+	fmt.Println("Set... Go!\n")
 
 	for {
 		printField()
-		if set.NumSets() == 0 {
-			fmt.Println("\nNo more sets.")
-			os.Exit(0)
-		}
 		fmt.Printf("\n[sets: %02d, deck: %02d] > ", setsFound, set.DeckSize())
 		str := ""
 		fmt.Scan(&str)
@@ -58,19 +54,24 @@ func play() {
 			continue
 		}
 		candidate := make([]int, 3)
+		candidateStr := ""
 		for i := range candidate {
 			candidate[i] = strings.Index(keys, string(str[i]))
-		}
-		for _, c := range candidate {
-			fmt.Printf("%s ", printCard(c))
+			candidateStr += fmt.Sprintf("%s ", printCard(candidate[i]))
 		}
 		if set.IsSet(candidate) {
-			setsFound++
-			fmt.Println("is a set!\n")
 			set.Remove(candidate)
+			if set.NumSets() == 0 {
+				fmt.Println("You found all the sets!  Let's play again.\n")
+				setsFound = 0
+				set.Shuffle()
+			} else {
+				fmt.Printf("Woohoo!  %s is a set!\n\n", candidateStr)
+				setsFound++
+			}
 			set.Deal()
 		} else {
-			fmt.Println("is not a set.\n")
+			fmt.Printf("D'oh!  %s is not a set.\n\n", candidateStr)
 		}
 	}
 }
