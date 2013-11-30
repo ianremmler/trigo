@@ -61,6 +61,7 @@ func play() {
 		}
 		if set.IsSet(candidate) {
 			set.Remove(candidate)
+			set.Deal()
 			if set.NumSets() == 0 {
 				fmt.Println("You found all the sets!  Let's play again.\n")
 				setsFound = 0
@@ -69,7 +70,6 @@ func play() {
 				fmt.Printf("Woohoo!  %s is a set!\n\n", candidateStr)
 				setsFound++
 			}
-			set.Deal()
 		} else {
 			fmt.Printf("D'oh!  %s is not a set.\n\n", candidateStr)
 		}
