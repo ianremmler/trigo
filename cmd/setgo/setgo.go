@@ -66,6 +66,7 @@ func play() {
 				fmt.Println("You found all the sets!  Let's play again.\n")
 				setsFound = 0
 				set.Shuffle()
+				set.Deal()
 			} else {
 				fmt.Printf("Woohoo!  %s is a set!\n\n", candidateStr)
 				setsFound++
