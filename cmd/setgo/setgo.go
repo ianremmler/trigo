@@ -57,7 +57,10 @@ func play() {
 		candidateStr := ""
 		for i := range candidate {
 			candidate[i] = strings.Index(keys, string(str[i]))
-			candidateStr += fmt.Sprintf("%s ", printCard(candidate[i]))
+			candidateStr += printCard(candidate[i])
+			if i == len(candidate) - 2 {
+				candidateStr += " "
+			}
 		}
 		if set.IsSet(candidate) {
 			set.Remove(candidate)
@@ -68,11 +71,11 @@ func play() {
 				set.Shuffle()
 				set.Deal()
 			} else {
-				fmt.Printf("Woohoo!  %s is a set!\n\n", candidateStr)
+				color.Printf("@g✔@| %s @g✔\n\n", candidateStr)
 				setsFound++
 			}
 		} else {
-			fmt.Printf("D'oh!  %s is not a set.\n\n", candidateStr)
+			color.Printf("@r✘@| %s @r✘\n\n", candidateStr)
 		}
 	}
 }
