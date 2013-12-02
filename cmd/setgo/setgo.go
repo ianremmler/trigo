@@ -58,7 +58,7 @@ func play() {
 		for i := range candidate {
 			candidate[i] = strings.Index(keys, string(str[i]))
 			candidateStr += printCard(candidate[i])
-			if i == len(candidate) - 2 {
+			if i < len(candidate) - 1 {
 				candidateStr += " "
 			}
 		}
