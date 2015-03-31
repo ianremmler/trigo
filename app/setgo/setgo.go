@@ -124,8 +124,8 @@ func touch(evt event.Touch) {
 	s := float32(evt.Loc.X) / float32(geom.Width)    // x fraction across display
 	t := float32(evt.Loc.Y) / float32(geom.Height)   // y fraction across display
 	marginX, marginY := 0.5*(w-fw)/fw, 0.5*(h-fh)/fh // "letterbox", if any
-	c := int((s*w/fw - marginX) * float32(cols))
-	r := int((t*h/fh - marginY) * float32(rows))
+	c := int(math.Floor(float64(s*w/fw-marginX) * float64(cols)))
+	r := int(math.Floor(float64(t*h/fh-marginY) * float64(rows)))
 
 	idx := -1
 	if r >= 0 && r < rows && c >= 0 && c < cols {
@@ -215,6 +215,8 @@ func drawCard(mat *f32.Mat4, card *setgo.Card, st state) {
 	gl.DisableVertexAttribArray(position)
 }
 
+// viewDims returns the display width/height and field width/height in units
+// based on the width of a card.
 func viewDims() (float32, float32, float32, float32) {
 	cols := len(field) / 3
 	fieldAspRat := float32(cols) / (3 * cardAspRat)
