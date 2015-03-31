@@ -24,7 +24,7 @@ var (
 	set   *setgo.SetGo
 	field []setgo.Card
 
-	on []bool
+	candidate = map[int]struct{}{}
 
 	program  gl.Program
 	position gl.Attrib
@@ -53,6 +53,14 @@ type shape struct {
 	buf   gl.Buffer
 }
 
+type state int
+
+const (
+	normal state = iota
+	selected
+	invalid
+)
+
 func main() {
 	app.Run(app.Callbacks{
 		Start: start,
@@ -74,7 +82,10 @@ func start() {
 		return
 	}
 
+	gl.Enable(gl.BLEND)
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	gl.LineWidth(4)
+
 	cardShape.buf = gl.CreateBuffer()
 	vertBytes := f32.Bytes(binary.LittleEndian, cardShape.verts...)
 	gl.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
@@ -92,7 +103,6 @@ func start() {
 	mvMat = gl.GetUniformLocation(program, "mvMat")
 
 	field = set.Field()
-	on = make([]bool, len(field))
 }
 
 func stop() {
@@ -117,20 +127,43 @@ func touch(evt event.Touch) {
 	r := int(float32(rows) * (ty/dh*h/fh - 0.5*(h-fh)/fh))
 
 	idx := -1
-	if r > 0 && r <= rows && c > 0 && c <= cols {
-		idx = 3*c + r
+	if r >= 0 && r < rows && c >= 0 && c < cols {
+		idx = 3*c + (2 - r)
 	}
 
-	// XXX {{{
-	if idx > 0 {
-		on[idx] = !on[idx]
+	if idx >= 0 {
+		updateCandidate(idx)
 	}
-	// XXX }}}
 }
 
-// func drawCard(mat *f32.Mat4, card *setgo.Card) {
-func drawCard(mat *f32.Mat4, idx int) {
-	card := field[idx]
+func updateCandidate(idx int) {
+	if _, ok := candidate[idx]; ok {
+		delete(candidate, idx)
+	} else if len(candidate) < 3 {
+		candidate[idx] = struct{}{}
+	}
+	if len(candidate) < 3 {
+		return
+	}
+	check := []int{}
+	for idx := range candidate {
+		check = append(check, idx)
+	}
+	if !set.IsSet(check) {
+		return
+	}
+	// still here... we got a set!
+	candidate = map[int]struct{}{}
+	set.Remove(check)
+	set.Deal()
+	if set.NumSets() == 0 {
+		set.Shuffle()
+		set.Deal()
+	}
+	field = set.Field()
+}
+
+func drawCard(mat *f32.Mat4, card *setgo.Card, st state) {
 	num, clr, shp, fil := card.Attr[0], card.Attr[1], card.Attr[2], card.Attr[3]
 
 	mvMat.WriteMat4(mat)
@@ -138,16 +171,9 @@ func drawCard(mat *f32.Mat4, idx int) {
 	gl.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
 	gl.EnableVertexAttribArray(position)
 	gl.VertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0)
-
 	gl.Uniform1i(shading, 2)
 	gl.Uniform4fv(color, cardColor)
 	gl.DrawArrays(gl.TRIANGLE_FAN, 0, len(cardShape.verts)/3)
-	if on[idx] {
-		gl.Uniform4f(color, 1, 0, 0, 1)
-	} else {
-		gl.Uniform4f(color, 0, 0, 0, 1)
-	}
-	gl.DrawArrays(gl.LINE_LOOP, 0, len(cardShape.verts)/3)
 	gl.DisableVertexAttribArray(position)
 
 	gl.BindBuffer(gl.ARRAY_BUFFER, shapes[shp].buf)
@@ -168,6 +194,23 @@ func drawCard(mat *f32.Mat4, idx int) {
 		gl.DrawArrays(gl.LINE_LOOP, 0, len(shapes[shp].verts)/3)
 	}
 	gl.DisableVertexAttribArray(position)
+
+	if st == normal {
+		return
+	}
+
+	mvMat.WriteMat4(mat)
+	gl.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
+	gl.EnableVertexAttribArray(position)
+	gl.VertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0)
+	switch st {
+	case selected:
+		gl.Uniform4f(color, 0, 1, 1, 0.25)
+	case invalid:
+		gl.Uniform4f(color, 1, 0, 0, 0.25)
+	}
+	gl.DrawArrays(gl.TRIANGLE_FAN, 0, len(cardShape.verts)/3)
+	gl.DisableVertexAttribArray(position)
 }
 
 func viewDims() (float32, float32, float32, float32) {
@@ -182,9 +225,6 @@ func viewDims() (float32, float32, float32, float32) {
 	} else {
 		height = fieldWidth / dispAspRat
 	}
-	// margin
-	width *= 1.01
-	height *= 1.01
 	return width, height, fieldWidth, fieldHeight
 }
 
@@ -206,10 +246,21 @@ func draw() {
 		x, y := float32(i/3), cardAspRat*float32(i%3)
 		cardMat := mat
 		cardMat.Translate(&cardMat, x-0.5*fw, y-0.5*fh, 0)
-		// 		drawCard(&cardMat, &field[i])
-		drawCard(&cardMat, i)
+		// shrink just a bit to separate cards
+		cardMat.Translate(&cardMat, 0.5, 0.5*cardAspRat, 0)
+		cardMat.Scale(&cardMat, 1.0-0.02*cardAspRat, 1.0-0.02, 1)
+		cardMat.Translate(&cardMat, -0.5, -0.5*cardAspRat, 0)
+
+		st := normal
+		if _, ok := candidate[i]; ok {
+			if len(candidate) < 3 {
+				st = selected
+			} else {
+				st = invalid
+			}
+		}
+		drawCard(&cardMat, &field[i], st)
 	}
-	// 	debug.DrawFPS()
 }
 
 var cardVerts = []float32{
