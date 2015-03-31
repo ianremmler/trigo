@@ -73,7 +73,10 @@ func main() {
 func start() {
 	rand.Seed(time.Now().UnixNano())
 	set = setgo.NewStd()
+
+	set.Shuffle()
 	set.Deal()
+	field = set.Field()
 
 	var err error
 	program, err = glutil.CreateProgram(vertShader, fragShader)
@@ -101,8 +104,6 @@ func start() {
 	color = gl.GetUniformLocation(program, "color")
 	shading = gl.GetUniformLocation(program, "shading")
 	mvMat = gl.GetUniformLocation(program, "mvMat")
-
-	field = set.Field()
 }
 
 func stop() {
@@ -131,7 +132,7 @@ func touch(evt event.Touch) {
 		idx = 3*c + (2 - r)
 	}
 
-	if idx >= 0 {
+	if idx >= 0 && idx < len(field) && !field[idx].Blank {
 		updateCandidate(idx)
 	}
 }
@@ -157,6 +158,7 @@ func updateCandidate(idx int) {
 	set.Remove(check)
 	set.Deal()
 	if set.NumSets() == 0 {
+		// we won!  play again...
 		set.Shuffle()
 		set.Deal()
 	}
@@ -243,6 +245,9 @@ func draw() {
 	w, h, fw, fh := viewDims()
 	mat := viewMat(w, h, fw, fh)
 	for i := range field {
+		if field[i].Blank {
+			continue
+		}
 		x, y := float32(i/3), cardAspRat*float32(i%3)
 		cardMat := mat
 		cardMat.Translate(&cardMat, x-0.5*fw, y-0.5*fh, 0)
