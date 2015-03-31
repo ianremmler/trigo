@@ -21,9 +21,8 @@ const (
 )
 
 var (
-	set   *setgo.SetGo
-	field []setgo.Card
-
+	set       *setgo.SetGo
+	field     []setgo.Card
 	candidate = map[int]struct{}{}
 
 	program  gl.Program
@@ -32,14 +31,16 @@ var (
 	shading  gl.Uniform
 	mvMat    gl.Uniform
 
-	cardShape = shape{verts: cardVerts}
-	cardColor = []float32{1, 1, 1, 1}
+	cardShape    = shape{verts: cardVerts}
+	cardColor    = []float32{1, 1, 1, 1}
+	selectColor  = []float32{0, 1, 1, 0.25}
+	invalidColor = []float32{1, 0, 0, 0.25}
 )
 
 var colors = [][]float32{
-	{1.0, 0.0, 0.0, 1.0},
-	{0.0, 0.75, 0.0, 1.0},
-	{0.0, 0.0, 1.0, 1.0},
+	{1, 0, 0, 1},
+	{0, 0.75, 0, 1},
+	{0, 0, 1, 1},
 }
 
 var shapes = []shape{
@@ -73,7 +74,6 @@ func main() {
 func start() {
 	rand.Seed(time.Now().UnixNano())
 	set = setgo.NewStd()
-
 	set.Shuffle()
 	set.Deal()
 	field = set.Field()
@@ -120,12 +120,12 @@ func touch(evt event.Touch) {
 	}
 
 	w, h, fw, fh := viewDims()
-	dw, dh := float32(geom.Width), float32(geom.Height)
-	tx, ty := float32(evt.Loc.X), float32(evt.Loc.Y)
-
 	rows, cols := 3, len(field)/3
-	c := int(float32(cols) * (tx/dw*w/fw - 0.5*(w-fw)/fw))
-	r := int(float32(rows) * (ty/dh*h/fh - 0.5*(h-fh)/fh))
+	s := float32(evt.Loc.X) / float32(geom.Width)    // x fraction across display
+	t := float32(evt.Loc.Y) / float32(geom.Height)   // y fraction across display
+	marginX, marginY := 0.5*(w-fw)/fw, 0.5*(h-fh)/fh // "letterbox", if any
+	c := int((s*w/fw - marginX) * float32(cols))
+	r := int((t*h/fh - marginY) * float32(rows))
 
 	idx := -1
 	if r >= 0 && r < rows && c >= 0 && c < cols {
@@ -168,8 +168,8 @@ func updateCandidate(idx int) {
 func drawCard(mat *f32.Mat4, card *setgo.Card, st state) {
 	num, clr, shp, fil := card.Attr[0], card.Attr[1], card.Attr[2], card.Attr[3]
 
+	// card base
 	mvMat.WriteMat4(mat)
-
 	gl.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
 	gl.EnableVertexAttribArray(position)
 	gl.VertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0)
@@ -178,18 +178,17 @@ func drawCard(mat *f32.Mat4, card *setgo.Card, st state) {
 	gl.DrawArrays(gl.TRIANGLE_FAN, 0, len(cardShape.verts)/3)
 	gl.DisableVertexAttribArray(position)
 
+	// symbols
 	gl.BindBuffer(gl.ARRAY_BUFFER, shapes[shp].buf)
 	gl.EnableVertexAttribArray(position)
 	gl.VertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0)
 	gl.Uniform4fv(color, colors[clr])
-
 	for i := 0; i <= num; i++ {
 		shapeMat := *mat
 		offset := float32(i+1) / (float32(num) + 2)
 		shapeMat.Translate(&shapeMat, 0.5, offset*cardAspRat, 0)
 		shapeMat.Scale(&shapeMat, 0.1, 0.1, 0)
 		mvMat.WriteMat4(&shapeMat)
-
 		gl.Uniform1i(shading, fil)
 		gl.DrawArrays(gl.TRIANGLE_FAN, 0, len(shapes[shp].verts)/3)
 		gl.Uniform1i(shading, 2)
@@ -201,15 +200,16 @@ func drawCard(mat *f32.Mat4, card *setgo.Card, st state) {
 		return
 	}
 
+	// candidate card highlighting
 	mvMat.WriteMat4(mat)
 	gl.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
 	gl.EnableVertexAttribArray(position)
 	gl.VertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0)
 	switch st {
 	case selected:
-		gl.Uniform4f(color, 0, 1, 1, 0.25)
+		gl.Uniform4fv(color, selectColor)
 	case invalid:
-		gl.Uniform4f(color, 1, 0, 0, 0.25)
+		gl.Uniform4fv(color, invalidColor)
 	}
 	gl.DrawArrays(gl.TRIANGLE_FAN, 0, len(cardShape.verts)/3)
 	gl.DisableVertexAttribArray(position)
@@ -222,6 +222,7 @@ func viewDims() (float32, float32, float32, float32) {
 
 	fieldWidth, fieldHeight := float32(cols), float32(3*cardAspRat)
 	width, height := fieldWidth, fieldHeight
+	// add letterboxing to preserve aspect ratio
 	if dispAspRat > fieldAspRat {
 		width = fieldHeight * dispAspRat
 	} else {
@@ -230,20 +231,16 @@ func viewDims() (float32, float32, float32, float32) {
 	return width, height, fieldWidth, fieldHeight
 }
 
-func viewMat(w, h, fw, fh float32) f32.Mat4 {
-	mat := f32.Mat4{}
-	mat.Identity()
-	mat.Scale(&mat, 1.0/(0.5*w), 1.0/(0.5*h), 1)
-	return mat
-}
-
 func draw() {
 	gl.ClearColor(0, 0, 0, 1)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 	gl.UseProgram(program)
 
 	w, h, fw, fh := viewDims()
-	mat := viewMat(w, h, fw, fh)
+	mat := f32.Mat4{}
+	mat.Identity()
+	mat.Scale(&mat, 1.0/(0.5*w), 1.0/(0.5*h), 1)
+
 	for i := range field {
 		if field[i].Blank {
 			continue
@@ -299,28 +296,30 @@ var hexVerts = []float32{
 	0.5, -sin60, 0,
 }
 
-const vertShader = `#version 100
-uniform mat4 mvMat;
+const vertShader = `
+	#version 100
+	uniform mat4 mvMat;
 
-attribute vec4 position;
-void main() {
-	gl_Position = mvMat * position;
-}`
+	attribute vec4 position;
+	void main() {
+		gl_Position = mvMat * position;
+	}`
 
-const fragShader = `#version 100
-precision mediump float;
+const fragShader = `
+	#version 100
+	precision mediump float;
 
-uniform vec4 color;
-uniform int shading;
+	uniform vec4 color;
+	uniform int shading;
 
-void main() {
-	if (shading == 0) {
-		discard;
-	}
-	if (shading == 1) {
-		if (mod((gl_FragCoord.x + gl_FragCoord.y) / 8.0, 2.0) < 1.0) {
+	void main() {
+		if (shading == 0) {
 			discard;
 		}
-	}
-	gl_FragColor = color;
-}`
+		if (shading == 1) {
+			if (mod((gl_FragCoord.x + gl_FragCoord.y) / 8.0, 2.0) < 1.0) {
+				discard;
+			}
+		}
+		gl_FragColor = color;
+	}`
