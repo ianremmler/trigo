@@ -274,28 +274,28 @@ var cardVerts = []float32{
 	0, cardAspRat, 0,
 }
 
-var sin60 = float32(math.Sqrt(3) / 2)
+var sec30 = float32(2 / math.Sqrt(3))
 
 var squareVerts = []float32{
-	-sin60, -sin60, 0,
-	sin60, -sin60, 0,
-	sin60, sin60, 0,
-	-sin60, sin60, 0,
+	-1, -1, 0,
+	1, -1, 0,
+	1, 1, 0,
+	-1, 1, 0,
 }
 
 var triVerts = []float32{
-	-sin60, -sin60, 0,
-	0, sin60, 0,
-	sin60, -sin60, 0,
+	-sec30, -1, 0,
+	0, 1, 0,
+	sec30, -1, 0,
 }
 
 var hexVerts = []float32{
-	-0.5, -sin60, 0,
-	-1, 0, 0,
-	-0.5, sin60, 0,
-	0.5, sin60, 0,
-	1, 0, 0,
-	0.5, -sin60, 0,
+	-0.5 * sec30, -1, 0,
+	-sec30, 0, 0,
+	-0.5 * sec30, 1, 0,
+	0.5 * sec30, 1, 0,
+	sec30, 0, 0,
+	0.5 * sec30, -1, 0,
 }
 
 const vertShader = `
