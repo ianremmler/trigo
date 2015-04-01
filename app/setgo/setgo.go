@@ -17,13 +17,18 @@ import (
 )
 
 const (
-	cardAspRat = 1.4
+	cardAspRat     = 1.4
+	transitionTime = 1 // seconds
 )
 
 var (
 	set       *setgo.SetGo
 	field     []setgo.Card
+	state     gameState
 	candidate = map[int]struct{}{}
+
+	transitionStart time.Time
+	transitionParam float32
 
 	program  gl.Program
 	position gl.Attrib
@@ -54,12 +59,24 @@ type shape struct {
 	buf   gl.Buffer
 }
 
-type state int
+type cardState int
 
 const (
-	normal state = iota
+	normal cardState = iota
 	selected
 	invalid
+	fadeOut
+	fadeIn
+)
+
+type gameState int
+
+const (
+	play gameState = iota
+	match
+	deal
+	win
+	newGame
 )
 
 func main() {
@@ -104,6 +121,8 @@ func start() {
 	color = gl.GetUniformLocation(program, "color")
 	shading = gl.GetUniformLocation(program, "shading")
 	mvMat = gl.GetUniformLocation(program, "mvMat")
+
+	startTransition(newGame)
 }
 
 func stop() {
@@ -115,7 +134,7 @@ func stop() {
 }
 
 func touch(evt event.Touch) {
-	if evt.Type != event.TouchEnd {
+	if evt.Type != event.TouchEnd || state != play {
 		return
 	}
 
@@ -154,18 +173,60 @@ func updateCandidate(idx int) {
 		return
 	}
 	// still here... we got a set!
-	candidate = map[int]struct{}{}
+	newState := match
 	set.Remove(check)
 	set.Deal()
 	if set.NumSets() == 0 {
 		// we won!  play again...
+		newState = win
 		set.Shuffle()
 		set.Deal()
 	}
-	field = set.Field()
+	startTransition(newState)
 }
 
-func drawCard(mat *f32.Mat4, card *setgo.Card, st state) {
+func startTransition(newState gameState) {
+	state = newState
+	transitionStart = time.Now()
+	transitionParam = 0.0
+}
+
+func updateState() {
+	if state == play {
+		return
+	}
+
+	delta := float32(time.Now().Sub(transitionStart).Seconds())
+	transitionParam = delta / transitionTime
+	if transitionParam < 1 {
+		return
+	}
+
+	// transition time's up
+	oldFieldSize := len(field)
+	field = set.Field()
+	switch state {
+	case match:
+		startTransition(deal)
+	case win:
+		startTransition(newGame)
+	default:
+		state = play
+		candidate = map[int]struct{}{}
+	}
+	if state != deal {
+		return
+	}
+
+	if len(field) > oldFieldSize {
+		// add new cards to candidate just so they'll fade in
+		for i := oldFieldSize; i < len(field); i++ {
+			candidate[i] = struct{}{}
+		}
+	}
+}
+
+func drawCard(mat *f32.Mat4, card *setgo.Card, st cardState) {
 	num, clr, shp, fil := card.Attr[0], card.Attr[1], card.Attr[2], card.Attr[3]
 
 	// card base
@@ -206,6 +267,10 @@ func drawCard(mat *f32.Mat4, card *setgo.Card, st state) {
 	gl.EnableVertexAttribArray(position)
 	gl.VertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0)
 	switch st {
+	case fadeOut:
+		gl.Uniform4f(color, 0, 0, 0, transitionParam)
+	case fadeIn:
+		gl.Uniform4f(color, 0, 0, 0, 1-transitionParam)
 	case selected:
 		gl.Uniform4fv(color, selectColor)
 	case invalid:
@@ -234,6 +299,8 @@ func viewDims() (float32, float32, float32, float32) {
 }
 
 func draw() {
+	updateState()
+
 	gl.ClearColor(0, 0, 0, 1)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 	gl.UseProgram(program)
@@ -242,6 +309,14 @@ func draw() {
 	mat := f32.Mat4{}
 	mat.Identity()
 	mat.Scale(&mat, 1.0/(0.5*w), 1.0/(0.5*h), 1)
+
+	st := normal
+	switch state {
+	case win:
+		st = fadeOut
+	case newGame:
+		st = fadeIn
+	}
 
 	for i := range field {
 		if field[i].Blank {
@@ -255,15 +330,22 @@ func draw() {
 		cardMat.Scale(&cardMat, 1.0-0.02*cardAspRat, 1.0-0.02, 1)
 		cardMat.Translate(&cardMat, -0.5, -0.5*cardAspRat, 0)
 
-		st := normal
-		if _, ok := candidate[i]; ok {
-			if len(candidate) < 3 {
-				st = selected
-			} else {
-				st = invalid
+		cardSt := st
+		if st == normal {
+			if _, ok := candidate[i]; ok {
+				switch {
+				case state == match:
+					cardSt = fadeOut
+				case state == deal:
+					cardSt = fadeIn
+				case len(candidate) < 3:
+					cardSt = selected
+				default:
+					cardSt = invalid
+				}
 			}
 		}
-		drawCard(&cardMat, &field[i], st)
+		drawCard(&cardMat, &field[i], cardSt)
 	}
 }
 
