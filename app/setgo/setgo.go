@@ -98,8 +98,7 @@ func start() {
 	var err error
 	program, err = glutil.CreateProgram(vertShader, fragShader)
 	if err != nil {
-		log.Printf("error creating GL program: %v", err)
-		return
+		log.Fatalln(err)
 	}
 
 	gl.Enable(gl.BLEND)
