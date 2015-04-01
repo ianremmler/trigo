@@ -260,7 +260,7 @@ func drawCard(mat *f32.Mat4, card *setgo.Card, st cardState) {
 		return
 	}
 
-	// candidate card highlighting
+	// card special effects
 	mvMat.WriteMat4(mat)
 	gl.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
 	gl.EnableVertexAttribArray(position)
