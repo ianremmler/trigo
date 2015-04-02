@@ -49,18 +49,35 @@ func play() {
 		terminal.Stdout.Clear()
 		terminal.Stdout.Move(0, 0)
 
-		if len(str) < 3 {
-			fmt.Println("You must enter 3 cards.\n")
+		str = strings.TrimSpace(str)
+		if len(str) != 3 {
+			fmt.Printf("You must enter 3 cards.\n\n")
 			continue
 		}
 		candidate := make([]int, 3)
 		candidateStr := ""
-		for i := range candidate {
-			candidate[i] = strings.Index(keys, string(str[i]))
-			candidateStr += printCard(candidate[i])
-			if i < len(candidate) - 1 {
+		seen := map[int]struct{}{}
+		isValid := true
+		for i := 0; i < len(str); i++ {
+			idx := strings.Index(keys, string(str[i]))
+			if idx < 0 {
+				isValid = false
+				break
+			}
+			if _, ok := seen[idx]; ok {
+				isValid = false
+				break
+			}
+			seen[idx] = struct{}{}
+			candidate[i] = idx
+			candidateStr += printCard(idx)
+			if i < len(candidate)-1 {
 				candidateStr += " "
 			}
+		}
+		if !isValid {
+			fmt.Printf("Invalid cards.  Try again.\n\n")
+			continue
 		}
 		if set.IsSet(candidate) {
 			set.Remove(candidate)

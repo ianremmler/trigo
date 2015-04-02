@@ -1,6 +1,0 @@
-SetGo is an implementation of the rules of the card game Set in Go.
-It requires a terminal that supports unicode and ANSI color.
-I am not affiliated with the makers of Set.
-
-See http://setgame.com/ for the rules and more about the game.
-And buy the actual card game.  It's awesome.

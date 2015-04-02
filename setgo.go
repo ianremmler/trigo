@@ -1,3 +1,4 @@
+// Package setgo provides the base for implementing a card game
 package setgo
 
 import (
@@ -5,11 +6,13 @@ import (
 	"math/rand"
 )
 
+// Card represents a playing card with attributes.
 type Card struct {
 	Attr  []int
 	Blank bool
 }
 
+// SetGo represents an instance of a game and it's state.
 type SetGo struct {
 	numAttrs    int
 	numAttrVals int
@@ -20,10 +23,12 @@ type SetGo struct {
 	field       []int
 }
 
+// NewStd returns an instance of a standard game.
 func NewStd() *SetGo {
 	return New(4, 3, 12, 3)
 }
 
+// New returns an instance of a custom game.
 func New(numAttrs, numAttrVals, fieldSize, fieldExpand int) *SetGo {
 	numCards := 1
 	for i := 0; i < numAttrs; i++ {
@@ -56,10 +61,13 @@ func (s *SetGo) genCards() {
 	}
 }
 
+// DeckSize returns the number of cards currently in the deck.
 func (s *SetGo) DeckSize() int {
 	return len(s.deck)
 }
 
+// Card returns ith card from the set of all cards, or a blank card if i is out
+// of range.
 func (s *SetGo) Card(i int) Card {
 	if i < 0 || i >= len(s.cards) {
 		return Card{Blank: true}
@@ -67,6 +75,7 @@ func (s *SetGo) Card(i int) Card {
 	return s.cards[i]
 }
 
+// FieldCard returns the ith field card, or a blank card if i is out of range.
 func (s *SetGo) FieldCard(i int) Card {
 	if i < 0 || i >= len(s.field) {
 		return Card{Blank: true}
@@ -74,6 +83,7 @@ func (s *SetGo) FieldCard(i int) Card {
 	return s.Card(s.field[i])
 }
 
+// Shuffle refills and shuffles the deck, and clears the field.
 func (s *SetGo) Shuffle() {
 	s.deck = rand.Perm(len(s.cards))
 	s.field = make([]int, s.fieldSize)
@@ -82,10 +92,8 @@ func (s *SetGo) Shuffle() {
 	}
 }
 
+// Remove removes a set of cards from the field.
 func (s *SetGo) Remove(set []int) {
-	if len(set) != s.numAttrVals {
-		return
-	}
 	for _, i := range set {
 		if i >= 0 && i < len(s.field) {
 			s.field[i] = -1
@@ -93,6 +101,7 @@ func (s *SetGo) Remove(set []int) {
 	}
 }
 
+// expandField adds new card slots to the field.
 func (s *SetGo) expandField() {
 	expand := make([]int, s.fieldExpand)
 	for i := range expand {
@@ -101,6 +110,7 @@ func (s *SetGo) expandField() {
 	s.field = append(s.field, expand...)
 }
 
+// tidyField moves cards to empty slots and shrinks field if possible.
 func (s *SetGo) tidyField() {
 	numExtra := len(s.field) - s.fieldSize
 	for i, e := range s.field[s.fieldSize:] {
@@ -122,6 +132,7 @@ func (s *SetGo) tidyField() {
 	s.field = s.field[:s.fieldSize+numExtra]
 }
 
+// addCards fills empty field slots with new cards.
 func (s *SetGo) addCards() {
 	for i, c := range s.field {
 		if c < 0 {
@@ -134,6 +145,8 @@ func (s *SetGo) addCards() {
 	}
 }
 
+// Deal deals new cards to the field, expanding the field if necessary until at
+// least one match is available.
 func (s *SetGo) Deal() {
 	s.tidyField()
 	s.addCards()
@@ -143,6 +156,7 @@ func (s *SetGo) Deal() {
 	}
 }
 
+// Field returns a slice of card indices representing the current field.
 func (s *SetGo) Field() []Card {
 	field := make([]Card, len(s.field))
 	for i, c := range s.field {
@@ -155,6 +169,7 @@ func (s *SetGo) Field() []Card {
 	return field
 }
 
+// IsSet returns whether a given set of cards is a valid match.
 func (s *SetGo) IsSet(candidate []int) bool {
 	if len(candidate) != s.numAttrVals {
 		return false
@@ -169,8 +184,8 @@ func (s *SetGo) IsSet(candidate []int) bool {
 			return false
 		}
 		card := &s.cards[c]
-		for j, val := range card.Attr {
-			attrCheck[j] |= 1 << uint(val)
+		for i, val := range card.Attr {
+			attrCheck[i] |= 1 << uint(val)
 		}
 	}
 	for _, attr := range attrCheck {
@@ -183,6 +198,7 @@ func (s *SetGo) IsSet(candidate []int) bool {
 	return true
 }
 
+// NumSets returns the number of matches in the field.
 func (s *SetGo) NumSets() int {
 	numSets := 0
 	candidate := make([]int, s.numAttrVals)
