@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/ianremmler/setgo"
+	"github.com/ianremmler/trigo"
 	"github.com/wsxiaoys/terminal"
 	"github.com/wsxiaoys/terminal/color"
 
@@ -22,27 +22,27 @@ var (
 		{"○", "◑", "●"},
 		{"△", "◮", "▲"},
 	}
-	setsFound = 0
-	set       *setgo.SetGo
+	matchesFound = 0
+	tri          *trigo.TriGo
 )
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	set = setgo.NewStd()
+	tri = trigo.NewStd()
 	play()
 }
 
 func play() {
-	set.Shuffle()
-	set.Deal()
+	tri.Shuffle()
+	tri.Deal()
 
 	terminal.Stdout.Clear()
 	terminal.Stdout.Move(0, 0)
-	fmt.Println("Set... Go!\n")
+	fmt.Println("Find all the matches!\n")
 
 	for {
 		printField()
-		fmt.Printf("\n[sets: %02d, deck: %02d] > ", setsFound, set.DeckSize())
+		fmt.Printf("\n[matches: %02d, deck: %02d] > ", matchesFound, tri.DeckSize())
 		str := ""
 		fmt.Scan(&str)
 
@@ -79,17 +79,17 @@ func play() {
 			fmt.Printf("Invalid cards.  Try again.\n\n")
 			continue
 		}
-		if set.IsSet(candidate) {
-			set.Remove(candidate)
-			set.Deal()
-			if set.NumSets() == 0 {
-				fmt.Println("You found all the sets!  Let's play again.\n")
-				setsFound = 0
-				set.Shuffle()
-				set.Deal()
+		if tri.IsMatch(candidate) {
+			tri.Remove(candidate)
+			tri.Deal()
+			if tri.NumMatches() == 0 {
+				fmt.Println("You found all the matches!  Let's play again.\n")
+				matchesFound = 0
+				tri.Shuffle()
+				tri.Deal()
 			} else {
 				color.Printf("@g✔@| %s @g✔\n\n", candidateStr)
-				setsFound++
+				matchesFound++
 			}
 		} else {
 			color.Printf("@r✘@| %s @r✘\n\n", candidateStr)
@@ -98,7 +98,7 @@ func play() {
 }
 
 func printCard(i int) string {
-	card := set.FieldCard(i)
+	card := tri.FieldCard(i)
 	str := ""
 	if card.Blank {
 		str = "[       ]"
@@ -113,7 +113,7 @@ func printCard(i int) string {
 }
 
 func printField() {
-	field := set.Field()
+	field := tri.Field()
 	for i := range field {
 		numCards := len(field)
 		numCols := numCards / 3

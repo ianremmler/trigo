@@ -2,28 +2,32 @@ package main
 
 import (
 	"encoding/binary"
+	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
 	"time"
 
-	"github.com/ianremmler/setgo"
+	"github.com/ianremmler/trigo"
 	"golang.org/x/mobile/app"
-	"golang.org/x/mobile/event"
-	"golang.org/x/mobile/f32"
-	"golang.org/x/mobile/geom"
+	"golang.org/x/mobile/event/lifecycle"
+	"golang.org/x/mobile/event/paint"
+	"golang.org/x/mobile/event/size"
+	"golang.org/x/mobile/event/touch"
+	"golang.org/x/mobile/exp/f32"
+	"golang.org/x/mobile/exp/gl/glutil"
 	"golang.org/x/mobile/gl"
-	"golang.org/x/mobile/gl/glutil"
 )
 
 const (
 	cardAspRat     = 1.4
 	transitionTime = 1 // seconds
+	stateFile      = "/data/data/org.remmler.TriGo/state"
 )
 
 var (
-	set       *setgo.SetGo
-	field     []setgo.Card
+	tri       *trigo.TriGo
+	field     []trigo.Card
 	state     gameState
 	candidate = map[int]struct{}{}
 
@@ -40,6 +44,8 @@ var (
 	cardColor    = []float32{1, 1, 1, 1}
 	selectColor  = []float32{0, 1, 1, 0.25}
 	invalidColor = []float32{1, 0, 0, 0.25}
+
+	siz size.Event
 )
 
 var colors = [][]float32{
@@ -80,20 +86,38 @@ const (
 )
 
 func main() {
-	app.Run(app.Callbacks{
-		Start: start,
-		Stop:  stop,
-		Draw:  draw,
-		Touch: touch,
+	app.Main(func(ap app.App) {
+		for evt := range ap.Events() {
+			switch evt := app.Filter(evt).(type) {
+			case lifecycle.Event:
+				switch evt.Crosses(lifecycle.StageVisible) {
+				case lifecycle.CrossOn:
+					start()
+				case lifecycle.CrossOff:
+					stop()
+				}
+			case size.Event:
+				siz = evt
+			case paint.Event:
+				draw()
+				ap.EndPaint(evt)
+			case touch.Event:
+				handleTouch(evt)
+			}
+		}
 	})
 }
 
 func start() {
 	rand.Seed(time.Now().UnixNano())
-	set = setgo.NewStd()
-	set.Shuffle()
-	set.Deal()
-	field = set.Field()
+	if stateData, err := ioutil.ReadFile(stateFile); err == nil {
+		tri = trigo.NewFromSavedState(stateData)
+	} else {
+		tri = trigo.NewStd()
+		tri.Shuffle()
+		tri.Deal()
+	}
+	field = tri.Field()
 
 	var err error
 	program, err = glutil.CreateProgram(vertShader, fragShader)
@@ -125,6 +149,9 @@ func start() {
 }
 
 func stop() {
+	if stateData, err := tri.State(); err == nil {
+		ioutil.WriteFile(stateFile, stateData, 0644)
+	}
 	gl.DeleteProgram(program)
 	gl.DeleteBuffer(cardShape.buf)
 	for i := range shapes {
@@ -132,15 +159,15 @@ func stop() {
 	}
 }
 
-func touch(evt event.Touch) {
-	if evt.Type != event.TouchEnd || state != play {
+func handleTouch(evt touch.Event) {
+	if evt.Type != touch.TypeEnd || state != play {
 		return
 	}
 
 	w, h, fw, fh := viewDims()
 	rows, cols := 3, len(field)/3
-	s := float32(evt.Loc.X) / float32(geom.Width)    // x fraction across display
-	t := float32(evt.Loc.Y) / float32(geom.Height)   // y fraction across display
+	s := float32(evt.X) / float32(siz.WidthPx)       // x fraction across display
+	t := float32(evt.Y) / float32(siz.HeightPx)      // y fraction across display
 	marginX, marginY := 0.5*(w-fw)/fw, 0.5*(h-fh)/fh // "letterbox", if any
 	c := int(math.Floor(float64(s*w/fw-marginX) * float64(cols)))
 	r := int(math.Floor(float64(t*h/fh-marginY) * float64(rows)))
@@ -168,18 +195,18 @@ func updateCandidate(idx int) {
 	for idx := range candidate {
 		check = append(check, idx)
 	}
-	if !set.IsSet(check) {
+	if !tri.IsMatch(check) {
 		return
 	}
-	// still here... we got a set!
+	// still here... we got a match!
 	newState := match
-	set.Remove(check)
-	set.Deal()
-	if set.NumSets() == 0 {
+	tri.Remove(check)
+	tri.Deal()
+	if tri.NumMatches() == 0 {
 		// we won!  play again...
 		newState = win
-		set.Shuffle()
-		set.Deal()
+		tri.Shuffle()
+		tri.Deal()
 	}
 	startTransition(newState)
 }
@@ -203,7 +230,7 @@ func updateState() {
 
 	// transition time's up
 	oldFieldSize := len(field)
-	field = set.Field()
+	field = tri.Field()
 	switch state {
 	case match:
 		startTransition(deal)
@@ -225,11 +252,25 @@ func updateState() {
 	}
 }
 
-func drawCard(mat *f32.Mat4, card *setgo.Card, st cardState) {
+func mat4ToSlice(mat *f32.Mat4) []float32 {
+	s := []float32{}
+	// 	for i := range mat {
+	// 		s = append(s, mat[i][:]...)
+	// 	}
+	for i := range mat {
+		for j := range mat[i] {
+			s = append(s, mat[j][i])
+		}
+	}
+	return s
+}
+
+func drawCard(mat *f32.Mat4, card *trigo.Card, st cardState) {
 	num, clr, shp, fil := card.Attr[0], card.Attr[1], card.Attr[2], card.Attr[3]
 
 	// card base
-	mvMat.WriteMat4(mat)
+	gl.UniformMatrix4fv(mvMat, mat4ToSlice(mat))
+
 	gl.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
 	gl.EnableVertexAttribArray(position)
 	gl.VertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0)
@@ -248,7 +289,7 @@ func drawCard(mat *f32.Mat4, card *setgo.Card, st cardState) {
 		offset := float32(i+1) / (float32(num) + 2)
 		shapeMat.Translate(&shapeMat, 0.5, offset*cardAspRat, 0)
 		shapeMat.Scale(&shapeMat, 0.1, 0.1, 0)
-		mvMat.WriteMat4(&shapeMat)
+		gl.UniformMatrix4fv(mvMat, mat4ToSlice(&shapeMat))
 		gl.Uniform1i(shading, fil)
 		gl.DrawArrays(gl.TRIANGLE_FAN, 0, len(shapes[shp].verts)/3)
 		gl.Uniform1i(shading, 2)
@@ -261,7 +302,8 @@ func drawCard(mat *f32.Mat4, card *setgo.Card, st cardState) {
 	}
 
 	// card special effects
-	mvMat.WriteMat4(mat)
+	gl.UniformMatrix4fv(mvMat, mat4ToSlice(mat))
+
 	gl.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
 	gl.EnableVertexAttribArray(position)
 	gl.VertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0)
@@ -283,10 +325,10 @@ func drawCard(mat *f32.Mat4, card *setgo.Card, st cardState) {
 // based on the width of a card.
 func viewDims() (float32, float32, float32, float32) {
 	cols := len(field) / 3
-	fieldAspRat := float32(cols) / (3 * cardAspRat)
-	dispAspRat := float32(geom.Width / geom.Height)
-
 	fieldWidth, fieldHeight := float32(cols), float32(3*cardAspRat)
+	fieldAspRat := fieldWidth / fieldHeight
+	dispAspRat := float32(siz.WidthPx) / float32(siz.HeightPx)
+
 	width, height := fieldWidth, fieldHeight
 	// add letterboxing to preserve aspect ratio
 	if dispAspRat > fieldAspRat {
