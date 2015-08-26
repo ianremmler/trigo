@@ -38,7 +38,7 @@ func play() {
 
 	terminal.Stdout.Clear()
 	terminal.Stdout.Move(0, 0)
-	fmt.Println("Find all the matches!\n")
+	fmt.Println("TriGo!\n")
 
 	for {
 		printField()
