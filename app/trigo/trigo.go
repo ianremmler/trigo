@@ -2,14 +2,18 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
+	"image"
+	"image/png"
 	"io/ioutil"
-	"log"
 	"math"
 	"math/rand"
 	"time"
 
 	"github.com/ianremmler/trigo"
 	"golang.org/x/mobile/app"
+	"golang.org/x/mobile/asset"
 	"golang.org/x/mobile/event/lifecycle"
 	"golang.org/x/mobile/event/paint"
 	"golang.org/x/mobile/event/size"
@@ -21,31 +25,9 @@ import (
 
 const (
 	cardAspRat     = 1.4
-	transitionTime = 1 // seconds
+	transitionTime = 1  // seconds
+	transitionRate = 30 // fps
 	stateFile      = "/data/data/org.remmler.TriGo/state"
-)
-
-var (
-	tri       *trigo.TriGo
-	field     []trigo.Card
-	state     gameState
-	candidate = map[int]struct{}{}
-
-	transitionStart time.Time
-	transitionParam float32
-
-	program  gl.Program
-	position gl.Attrib
-	color    gl.Uniform
-	shading  gl.Uniform
-	mvMat    gl.Uniform
-
-	cardShape    = shape{verts: cardVerts}
-	cardColor    = []float32{1, 1, 1, 1}
-	selectColor  = []float32{0, 1, 1, 0.25}
-	invalidColor = []float32{1, 0, 0, 0.25}
-
-	siz size.Event
 )
 
 var colors = [][]float32{
@@ -67,6 +49,10 @@ type shape struct {
 
 type cardState int
 
+type TransitionEvent struct {
+	T float32
+}
+
 const (
 	normal cardState = iota
 	selected
@@ -85,24 +71,88 @@ const (
 	newGame
 )
 
+var (
+	ap        app.App
+	tri       *trigo.TriGo
+	field     []trigo.Card
+	state     gameState
+	candidate = map[int]struct{}{}
+
+	transitionTicker *time.Ticker
+	transitionStart  time.Time
+	transitionParam  float32
+
+	glctx gl.Context
+
+	fontTex gl.Texture
+
+	cardProg *prog
+	textProg *prog
+
+	cardShape = shape{verts: cardVerts}
+
+	charShape = shape{verts: charVerts}
+	fontShape shape
+
+	cardColor    = []float32{1, 1, 1, 1}
+	selectColor  = []float32{0, 1, 1, 0.25}
+	invalidColor = []float32{1, 0, 0, 0.25}
+	textColor    = []float32{0, 1, 1, 1}
+
+	siz size.Event
+
+	matches int
+)
+
+type prog struct {
+	p gl.Program
+	u map[string]gl.Uniform
+	a map[string]gl.Attrib
+}
+
+func newProg(ctx gl.Context, vertShader, fragShader string, uni []string, attrib []string) *prog {
+	p := &prog{u: map[string]gl.Uniform{}, a: map[string]gl.Attrib{}}
+	var err error
+	p.p, err = glutil.CreateProgram(glctx, vertShader, fragShader)
+	if err != nil {
+		return nil
+	}
+	for _, name := range uni {
+		p.u[name] = glctx.GetUniformLocation(p.p, name)
+	}
+	for _, name := range attrib {
+		p.a[name] = glctx.GetAttribLocation(p.p, name)
+	}
+	return p
+}
+
 func main() {
-	app.Main(func(ap app.App) {
+	app.Main(func(a app.App) {
+		ap = a
 		for evt := range ap.Events() {
-			switch evt := app.Filter(evt).(type) {
+			switch evt := ap.Filter(evt).(type) {
 			case lifecycle.Event:
 				switch evt.Crosses(lifecycle.StageVisible) {
 				case lifecycle.CrossOn:
+					glctx, _ = evt.DrawContext.(gl.Context)
 					start()
 				case lifecycle.CrossOff:
 					stop()
+					glctx = nil
 				}
 			case size.Event:
 				siz = evt
 			case paint.Event:
 				draw()
-				ap.EndPaint(evt)
 			case touch.Event:
 				handleTouch(evt)
+				draw()
+			case TransitionEvent:
+				transitionParam = evt.T
+				if evt.T >= 1 { // transitionion complete
+					updateState()
+				}
+				draw()
 			}
 		}
 	})
@@ -110,6 +160,10 @@ func main() {
 
 func start() {
 	rand.Seed(time.Now().UnixNano())
+
+	setupCardProg()
+	setupTextProg()
+
 	if stateData, err := ioutil.ReadFile(stateFile); err == nil {
 		tri = trigo.NewFromSavedState(stateData)
 	} else {
@@ -119,44 +173,97 @@ func start() {
 	}
 	field = tri.Field()
 
-	var err error
-	program, err = glutil.CreateProgram(vertShader, fragShader)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	gl.LineWidth(4)
-
-	cardShape.buf = gl.CreateBuffer()
-	vertBytes := f32.Bytes(binary.LittleEndian, cardShape.verts...)
-	gl.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
-	gl.BufferData(gl.ARRAY_BUFFER, vertBytes, gl.STATIC_DRAW)
-	for i := range shapes {
-		shapes[i].buf = gl.CreateBuffer()
-		vertBytes = f32.Bytes(binary.LittleEndian, shapes[i].verts...)
-		gl.BindBuffer(gl.ARRAY_BUFFER, shapes[i].buf)
-		gl.BufferData(gl.ARRAY_BUFFER, vertBytes, gl.STATIC_DRAW)
-	}
-
-	position = gl.GetAttribLocation(program, "position")
-	color = gl.GetUniformLocation(program, "color")
-	shading = gl.GetUniformLocation(program, "shading")
-	mvMat = gl.GetUniformLocation(program, "mvMat")
+	glctx.Enable(gl.BLEND)
+	glctx.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	glctx.LineWidth(4)
 
 	startTransition(newGame)
+}
+
+func setupCardProg() error {
+	cardProg = newProg(glctx, cardVertShader, cardFragShader,
+		[]string{"mat", "color", "shading"}, []string{"pos"})
+	if cardProg == nil {
+		return errors.New("error creating card program")
+	}
+	cardShape.buf = glctx.CreateBuffer()
+	vertBytes := f32.Bytes(binary.LittleEndian, cardShape.verts...)
+	glctx.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
+	glctx.BufferData(gl.ARRAY_BUFFER, vertBytes, gl.STATIC_DRAW)
+	for i := range shapes {
+		shapes[i].buf = glctx.CreateBuffer()
+		vertBytes = f32.Bytes(binary.LittleEndian, shapes[i].verts...)
+		glctx.BindBuffer(gl.ARRAY_BUFFER, shapes[i].buf)
+		glctx.BufferData(gl.ARRAY_BUFFER, vertBytes, gl.STATIC_DRAW)
+	}
+	return nil
+}
+
+func setupTextProg() error {
+	textProg = newProg(glctx, textVertShader, textFragShader,
+		[]string{"mat", "color"}, []string{"pos", "texCoords"})
+	if textProg == nil {
+		return errors.New("error creating text program")
+	}
+	fontData, err := asset.Open("font.png")
+	if err != nil {
+		return err
+	}
+	img, err := png.Decode(fontData)
+	if err != nil {
+		return err
+	}
+	fontImg, ok := img.(*image.NRGBA)
+	if !ok {
+		return errors.New("invalid font format")
+	}
+	if bounds := fontImg.Bounds(); bounds.Max.X != 256 || bounds.Max.Y != 256 {
+		return errors.New("invalid font dimensions")
+	}
+	fontTex = glctx.CreateTexture()
+	glctx.BindTexture(gl.TEXTURE_2D, fontTex)
+	glctx.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	glctx.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	glctx.TexImage2D(gl.TEXTURE_2D, 0, 256, 256, gl.RGBA, gl.UNSIGNED_BYTE, fontImg.Pix)
+
+	fontVerts := []float32{}
+	for i := 0; i < 16; i++ {
+		t1, t0 := float32(i)/16, float32(i+1)/16
+		for j := 0; j < 16; j++ {
+			s0, s1 := float32(j)/16, float32(j+1)/16
+			fontVerts = append(fontVerts, s0, t0, s1, t0, s1, t1, s0, t1)
+		}
+	}
+
+	fontShape.verts = fontVerts
+	fontShape.buf = glctx.CreateBuffer()
+	texCoordBytes := f32.Bytes(binary.LittleEndian, fontShape.verts...)
+	glctx.BindBuffer(gl.ARRAY_BUFFER, fontShape.buf)
+	glctx.BufferData(gl.ARRAY_BUFFER, texCoordBytes, gl.STATIC_DRAW)
+
+	charShape.buf = glctx.CreateBuffer()
+	charBytes := f32.Bytes(binary.LittleEndian, charShape.verts...)
+	glctx.BindBuffer(gl.ARRAY_BUFFER, charShape.buf)
+	glctx.BufferData(gl.ARRAY_BUFFER, charBytes, gl.STATIC_DRAW)
+
+	return nil
 }
 
 func stop() {
 	if stateData, err := tri.State(); err == nil {
 		ioutil.WriteFile(stateFile, stateData, 0644)
 	}
-	gl.DeleteProgram(program)
-	gl.DeleteBuffer(cardShape.buf)
+
+	glctx.DeleteProgram(cardProg.p)
+	glctx.DeleteBuffer(cardShape.buf)
 	for i := range shapes {
-		gl.DeleteBuffer(shapes[i].buf)
+		glctx.DeleteBuffer(shapes[i].buf)
 	}
+
+	glctx.DeleteProgram(textProg.p)
+	glctx.DeleteTexture(fontTex)
+	glctx.DeleteBuffer(charShape.buf)
+	glctx.DeleteBuffer(fontShape.buf)
 }
 
 func handleTouch(evt touch.Event) {
@@ -199,11 +306,13 @@ func updateCandidate(idx int) {
 		return
 	}
 	// still here... we got a match!
+	matches++
 	newState := match
 	tri.Remove(check)
 	tri.Deal()
 	if tri.NumMatches() == 0 {
 		// we won!  play again...
+		matches = 0
 		newState = win
 		tri.Shuffle()
 		tri.Deal()
@@ -212,9 +321,31 @@ func updateCandidate(idx int) {
 }
 
 func startTransition(newState gameState) {
+	if newState == play {
+		return
+	}
+
 	state = newState
 	transitionStart = time.Now()
 	transitionParam = 0.0
+	go transition()
+}
+
+func transition() {
+	transitionTicker = time.NewTicker(time.Second / transitionRate)
+	for {
+		<-transitionTicker.C
+		delta := float32(time.Now().Sub(transitionStart).Seconds())
+		t := delta / transitionTime
+		done := t >= 1
+		if done {
+			transitionTicker.Stop()
+		}
+		ap.Send(TransitionEvent{t})
+		if done {
+			return
+		}
+	}
 }
 
 func updateState() {
@@ -222,13 +353,6 @@ func updateState() {
 		return
 	}
 
-	delta := float32(time.Now().Sub(transitionStart).Seconds())
-	transitionParam = delta / transitionTime
-	if transitionParam < 1 {
-		return
-	}
-
-	// transition time's up
 	oldFieldSize := len(field)
 	field = tri.Field()
 	switch state {
@@ -254,9 +378,6 @@ func updateState() {
 
 func mat4ToSlice(mat *f32.Mat4) []float32 {
 	s := []float32{}
-	// 	for i := range mat {
-	// 		s = append(s, mat[i][:]...)
-	// 	}
 	for i := range mat {
 		for j := range mat[i] {
 			s = append(s, mat[j][i])
@@ -269,56 +390,57 @@ func drawCard(mat *f32.Mat4, card *trigo.Card, st cardState) {
 	num, clr, shp, fil := card.Attr[0], card.Attr[1], card.Attr[2], card.Attr[3]
 
 	// card base
-	gl.UniformMatrix4fv(mvMat, mat4ToSlice(mat))
 
-	gl.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
-	gl.EnableVertexAttribArray(position)
-	gl.VertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0)
-	gl.Uniform1i(shading, 2)
-	gl.Uniform4fv(color, cardColor)
-	gl.DrawArrays(gl.TRIANGLE_FAN, 0, len(cardShape.verts)/3)
-	gl.DisableVertexAttribArray(position)
+	glctx.UniformMatrix4fv(cardProg.u["mat"], mat4ToSlice(mat))
+	glctx.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
+	glctx.EnableVertexAttribArray(cardProg.a["pos"])
+	glctx.VertexAttribPointer(cardProg.a["pos"], 3, gl.FLOAT, false, 0, 0)
+	glctx.Uniform1i(cardProg.u["shading"], 2)
+	glctx.Uniform4fv(cardProg.u["color"], cardColor)
+	glctx.DrawArrays(gl.TRIANGLE_FAN, 0, len(cardShape.verts)/3)
+	glctx.DisableVertexAttribArray(cardProg.a["pos"])
 
 	// symbols
-	gl.BindBuffer(gl.ARRAY_BUFFER, shapes[shp].buf)
-	gl.EnableVertexAttribArray(position)
-	gl.VertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0)
-	gl.Uniform4fv(color, colors[clr])
+
+	glctx.BindBuffer(gl.ARRAY_BUFFER, shapes[shp].buf)
+	glctx.EnableVertexAttribArray(cardProg.a["pos"])
+	glctx.VertexAttribPointer(cardProg.a["pos"], 3, gl.FLOAT, false, 0, 0)
+	glctx.Uniform4fv(cardProg.u["color"], colors[clr])
 	for i := 0; i <= num; i++ {
 		shapeMat := *mat
 		offset := float32(i+1) / (float32(num) + 2)
 		shapeMat.Translate(&shapeMat, 0.5, offset*cardAspRat, 0)
 		shapeMat.Scale(&shapeMat, 0.1, 0.1, 0)
-		gl.UniformMatrix4fv(mvMat, mat4ToSlice(&shapeMat))
-		gl.Uniform1i(shading, fil)
-		gl.DrawArrays(gl.TRIANGLE_FAN, 0, len(shapes[shp].verts)/3)
-		gl.Uniform1i(shading, 2)
-		gl.DrawArrays(gl.LINE_LOOP, 0, len(shapes[shp].verts)/3)
+		glctx.UniformMatrix4fv(cardProg.u["mat"], mat4ToSlice(&shapeMat))
+		glctx.Uniform1i(cardProg.u["shading"], fil)
+		glctx.DrawArrays(gl.TRIANGLE_FAN, 0, len(shapes[shp].verts)/3)
+		glctx.Uniform1i(cardProg.u["shading"], 2)
+		glctx.DrawArrays(gl.LINE_LOOP, 0, len(shapes[shp].verts)/3)
 	}
-	gl.DisableVertexAttribArray(position)
+	glctx.DisableVertexAttribArray(cardProg.a["pos"])
 
 	if st == normal {
 		return
 	}
 
 	// card special effects
-	gl.UniformMatrix4fv(mvMat, mat4ToSlice(mat))
 
-	gl.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
-	gl.EnableVertexAttribArray(position)
-	gl.VertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0)
+	glctx.UniformMatrix4fv(cardProg.u["mat"], mat4ToSlice(mat))
+	glctx.BindBuffer(gl.ARRAY_BUFFER, cardShape.buf)
+	glctx.EnableVertexAttribArray(cardProg.a["pos"])
+	glctx.VertexAttribPointer(cardProg.a["pos"], 3, gl.FLOAT, false, 0, 0)
 	switch st {
 	case fadeOut:
-		gl.Uniform4f(color, 0, 0, 0, transitionParam)
+		glctx.Uniform4f(cardProg.u["color"], 0, 0, 0, transitionParam)
 	case fadeIn:
-		gl.Uniform4f(color, 0, 0, 0, 1-transitionParam)
+		glctx.Uniform4f(cardProg.u["color"], 0, 0, 0, 1-transitionParam)
 	case selected:
-		gl.Uniform4fv(color, selectColor)
+		glctx.Uniform4fv(cardProg.u["color"], selectColor)
 	case invalid:
-		gl.Uniform4fv(color, invalidColor)
+		glctx.Uniform4fv(cardProg.u["color"], invalidColor)
 	}
-	gl.DrawArrays(gl.TRIANGLE_FAN, 0, len(cardShape.verts)/3)
-	gl.DisableVertexAttribArray(position)
+	glctx.DrawArrays(gl.TRIANGLE_FAN, 0, len(cardShape.verts)/3)
+	glctx.DisableVertexAttribArray(cardProg.a["pos"])
 }
 
 // viewDims returns the display width/height and field width/height in units
@@ -340,13 +462,12 @@ func viewDims() (float32, float32, float32, float32) {
 }
 
 func draw() {
-	updateState()
-
-	gl.ClearColor(0, 0, 0, 1)
-	gl.Clear(gl.COLOR_BUFFER_BIT)
-	gl.UseProgram(program)
+	glctx.ClearColor(0, 0, 0, 1)
+	glctx.Clear(gl.COLOR_BUFFER_BIT)
+	glctx.UseProgram(cardProg.p)
 
 	w, h, fw, fh := viewDims()
+
 	mat := f32.Mat4{}
 	mat.Identity()
 	mat.Scale(&mat, 1.0/(0.5*w), 1.0/(0.5*h), 1)
@@ -364,12 +485,12 @@ func draw() {
 			continue
 		}
 		x, y := float32(i/3), cardAspRat*float32(i%3)
-		cardMat := mat
-		cardMat.Translate(&cardMat, x-0.5*fw, y-0.5*fh, 0)
+		mvMat := mat
+		mvMat.Translate(&mvMat, x-0.5*fw, y-0.5*fh, 0)
 		// shrink just a bit to separate cards
-		cardMat.Translate(&cardMat, 0.5, 0.5*cardAspRat, 0)
-		cardMat.Scale(&cardMat, 1.0-0.02*cardAspRat, 1.0-0.02, 1)
-		cardMat.Translate(&cardMat, -0.5, -0.5*cardAspRat, 0)
+		mvMat.Translate(&mvMat, 0.5, 0.5*cardAspRat, 0)
+		mvMat.Scale(&mvMat, 1.0-0.02*cardAspRat, 1.0-0.02, 1)
+		mvMat.Translate(&mvMat, -0.5, -0.5*cardAspRat, 0)
 
 		cardSt := st
 		if st == normal {
@@ -386,8 +507,46 @@ func draw() {
 				}
 			}
 		}
-		drawCard(&cardMat, &field[i], cardSt)
+		drawCard(&mvMat, &field[i], cardSt)
 	}
+
+	textMat := mat
+	textMat.Translate(&textMat, -0.5*fw, 0.5*fh, 0)
+	textMat.Scale(&textMat, 0.25, 0.25, 1)
+	textMat.Translate(&textMat, 0.5, 0.5, 1)
+	drawText(fmt.Sprintf("DECK: %d", tri.DeckSize()), textMat, textColor)
+
+	textMat = mat
+	textMat.Translate(&textMat, -0.5*fw, -0.5*fh, 0)
+	textMat.Scale(&textMat, 0.25, 0.25, 1)
+	textMat.Translate(&textMat, 0.5, -1.5, 1)
+	drawText(fmt.Sprintf("TRIS: %d", matches), textMat, textColor)
+
+	ap.Publish()
+}
+
+// drawText draws text in the position and orientation defined by mat
+// each character is unit height and width (1.0 x 1.0)
+func drawText(text string, mat f32.Mat4, color []float32) {
+	glctx.UseProgram(textProg.p)
+	glctx.BindBuffer(gl.ARRAY_BUFFER, charShape.buf)
+	glctx.EnableVertexAttribArray(textProg.a["pos"])
+	glctx.VertexAttribPointer(textProg.a["pos"], 3, gl.FLOAT, false, 0, 0)
+	glctx.BindBuffer(gl.ARRAY_BUFFER, fontShape.buf)
+	glctx.BindTexture(gl.TEXTURE_2D, fontTex)
+	glctx.EnableVertexAttribArray(textProg.a["texCoords"])
+	glctx.Uniform4fv(textProg.u["color"], color)
+	for _, c := range text {
+		if c > 255 {
+			continue
+		}
+		glctx.VertexAttribPointer(textProg.a["texCoords"], 2, gl.FLOAT, false, 0, int(c)*32)
+		glctx.UniformMatrix4fv(textProg.u["mat"], mat4ToSlice(&mat))
+		glctx.DrawArrays(gl.TRIANGLE_FAN, 0, len(charShape.verts)/3)
+		mat.Translate(&mat, 1.0, 0.0, 0.0)
+	}
+	glctx.DisableVertexAttribArray(textProg.a["pos"])
+	glctx.DisableVertexAttribArray(textProg.a["texCoords"])
 }
 
 var cardVerts = []float32{
@@ -421,16 +580,23 @@ var hexVerts = []float32{
 	0.5 * sec30, -1, 0,
 }
 
-const vertShader = `
-	#version 100
-	uniform mat4 mvMat;
+var charVerts = []float32{
+	0, 0, 0,
+	1, 0, 0,
+	1, 1, 0,
+	0, 1, 0,
+}
 
-	attribute vec4 position;
+const cardVertShader = `
+	#version 100
+	uniform mat4 mat;
+
+	attribute vec4 pos;
 	void main() {
-		gl_Position = mvMat * position;
+		gl_Position = mat * pos;
 	}`
 
-const fragShader = `
+const cardFragShader = `
 	#version 100
 	precision mediump float;
 
@@ -448,3 +614,27 @@ const fragShader = `
 		}
 		gl_FragColor = color;
 	}`
+
+const textVertShader = `
+	#version 100
+	uniform mat4 mat;
+	attribute vec2 texCoords;
+	varying vec2 fragTexCoord;
+	attribute vec4 pos;
+
+	void main() {
+		fragTexCoord = texCoords;
+		gl_Position = mat * pos;
+	}`
+
+const textFragShader = `
+	#version 100
+	precision mediump float;
+
+	uniform sampler2D tex;
+	uniform vec4 color;
+	varying vec2 fragTexCoord;
+
+	void main() {
+		gl_FragColor = color * texture2D(tex, fragTexCoord);
+	} `
