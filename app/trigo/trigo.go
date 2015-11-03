@@ -27,6 +27,7 @@ const (
 	cardAspRat     = 1.4
 	transitionTime = 1  // seconds
 	transitionRate = 30 // fps
+	charsPerRow    = 16
 	stateFile      = "/data/data/org.remmler.TriGo/state"
 )
 
@@ -485,12 +486,12 @@ func draw() {
 			continue
 		}
 		x, y := float32(i/3), cardAspRat*float32(i%3)
-		mvMat := mat
-		mvMat.Translate(&mvMat, x-0.5*fw, y-0.5*fh, 0)
+		cardMat := mat
+		cardMat.Translate(&cardMat, x-0.5*fw, y-0.5*fh, 0)
 		// shrink just a bit to separate cards
-		mvMat.Translate(&mvMat, 0.5, 0.5*cardAspRat, 0)
-		mvMat.Scale(&mvMat, 1.0-0.02*cardAspRat, 1.0-0.02, 1)
-		mvMat.Translate(&mvMat, -0.5, -0.5*cardAspRat, 0)
+		cardMat.Translate(&cardMat, 0.5, 0.5*cardAspRat, 0)
+		cardMat.Scale(&cardMat, 1.0-0.02*cardAspRat, 1.0-0.02, 1)
+		cardMat.Translate(&cardMat, -0.5, -0.5*cardAspRat, 0)
 
 		cardSt := st
 		if st == normal {
@@ -507,20 +508,21 @@ func draw() {
 				}
 			}
 		}
-		drawCard(&mvMat, &field[i], cardSt)
+		drawCard(&cardMat, &field[i], cardSt)
 	}
 
 	textMat := mat
+
 	textMat.Translate(&textMat, -0.5*fw, 0.5*fh, 0)
-	textMat.Scale(&textMat, 0.25, 0.25, 1)
-	textMat.Translate(&textMat, 0.5, 0.5, 1)
+	textMat.Scale(&textMat, w/charsPerRow, h/charsPerRow, 1)
+	textMat.Translate(&textMat, 0.0, 0.5, 1)
 	drawText(fmt.Sprintf("DECK: %d", tri.DeckSize()), textMat, textColor)
 
 	textMat = mat
 	textMat.Translate(&textMat, -0.5*fw, -0.5*fh, 0)
-	textMat.Scale(&textMat, 0.25, 0.25, 1)
-	textMat.Translate(&textMat, 0.5, -1.5, 1)
-	drawText(fmt.Sprintf("TRIS: %d", matches), textMat, textColor)
+	textMat.Scale(&textMat, w/charsPerRow, h/charsPerRow, 1)
+	textMat.Translate(&textMat, 0.0, -1.5, 1)
+	drawText(fmt.Sprintf("MATCHES: %d", matches), textMat, textColor)
 
 	ap.Publish()
 }
