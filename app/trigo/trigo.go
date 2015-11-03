@@ -463,12 +463,10 @@ func viewDims() (float32, float32, float32, float32) {
 }
 
 func draw() {
-	glctx.ClearColor(0, 0, 0, 1)
+	glctx.ClearColor(0, 0, 0, 0)
 	glctx.Clear(gl.COLOR_BUFFER_BIT)
-	glctx.UseProgram(cardProg.p)
 
 	w, h, fw, fh := viewDims()
-
 	mat := f32.Mat4{}
 	mat.Identity()
 	mat.Scale(&mat, 1.0/(0.5*w), 1.0/(0.5*h), 1)
@@ -481,6 +479,7 @@ func draw() {
 		st = fadeIn
 	}
 
+	glctx.UseProgram(cardProg.p)
 	for i := range field {
 		if field[i].Blank {
 			continue
