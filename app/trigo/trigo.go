@@ -173,9 +173,7 @@ var (
 	deckSize  int
 	candidate = map[int]struct{}{}
 
-	transitionTicker *time.Ticker
-	transitionStart  time.Time
-	transitionParam  float32
+	transitionParam float32
 
 	cardShape = shape{verts: cardVerts}
 	charShape = shape{verts: charVerts}
@@ -413,19 +411,19 @@ func startTransition(newState gameState) {
 	}
 
 	state = newState
-	transitionStart = time.Now()
 	transitionParam = 0.0
 	go transition()
 }
 
 func transition() {
-	transitionTicker = time.NewTicker(time.Second / transitionRate)
-	for elapsed := 0 * time.Second; elapsed <= transitionTime; {
-		now := <-transitionTicker.C
-		elapsed = now.Sub(transitionStart)
+	startTime := time.Now()
+	tick := time.NewTicker(time.Second / transitionRate)
+	for elapsed := 0 * time.Second; elapsed < transitionTime; {
+		now := <-tick.C
+		elapsed = now.Sub(startTime)
 		ap.Send(TransitionEvent{float32(elapsed) / float32(transitionTime)})
 	}
-	transitionTicker.Stop()
+	tick.Stop()
 }
 
 func updateState() {
