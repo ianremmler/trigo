@@ -37,22 +37,18 @@ var colors = [][]float32{
 	{0, 0, 1, 1},
 }
 
+type shape struct {
+	verts []float32
+	buf   gl.Buffer
+}
+
 var shapes = []shape{
 	{verts: squareVerts},
 	{verts: triVerts},
 	{verts: hexVerts},
 }
 
-type shape struct {
-	verts []float32
-	buf   gl.Buffer
-}
-
 type cardState int
-
-type TransitionEvent struct {
-	T float32
-}
 
 const (
 	normal cardState = iota
@@ -72,26 +68,115 @@ const (
 	newGame
 )
 
+var cardVerts = []float32{
+	0, 0, 0,
+	1, 0, 0,
+	1, cardAspRat, 0,
+	0, cardAspRat, 0,
+}
+
+var sec30 = float32(2 / math.Sqrt(3))
+
+var squareVerts = []float32{
+	-1, -1, 0,
+	1, -1, 0,
+	1, 1, 0,
+	-1, 1, 0,
+}
+
+var triVerts = []float32{
+	-sec30, -1, 0,
+	0, 1, 0,
+	sec30, -1, 0,
+}
+
+var hexVerts = []float32{
+	-0.5 * sec30, -1, 0,
+	-sec30, 0, 0,
+	-0.5 * sec30, 1, 0,
+	0.5 * sec30, 1, 0,
+	sec30, 0, 0,
+	0.5 * sec30, -1, 0,
+}
+
+var charVerts = []float32{
+	0, 0, 0,
+	1, 0, 0,
+	1, 1, 0,
+	0, 1, 0,
+}
+
+const cardVertShader = `
+	#version 100
+	uniform mat4 mat;
+
+	attribute vec4 pos;
+	void main() {
+		gl_Position = mat * pos;
+	}`
+
+const cardFragShader = `
+	#version 100
+	precision mediump float;
+
+	uniform vec4 color;
+	uniform int shading;
+
+	void main() {
+		if (shading == 0) {
+			discard;
+		}
+		if (shading == 1) {
+			if (mod((gl_FragCoord.x + gl_FragCoord.y) / 8.0, 2.0) < 1.0) {
+				discard;
+			}
+		}
+		gl_FragColor = color;
+	}`
+
+const textVertShader = `
+	#version 100
+	uniform mat4 mat;
+	attribute vec2 texCoords;
+	varying vec2 fragTexCoord;
+	attribute vec4 pos;
+
+	void main() {
+		fragTexCoord = texCoords;
+		gl_Position = mat * pos;
+	}`
+
+const textFragShader = `
+	#version 100
+	precision mediump float;
+
+	uniform sampler2D tex;
+	uniform vec4 color;
+	varying vec2 fragTexCoord;
+
+	void main() {
+		gl_FragColor = color * texture2D(tex, fragTexCoord);
+	} `
+
 var (
-	ap        app.App
+	ap       app.App
+	siz      size.Event
+	glctx    gl.Context
+	fontTex  gl.Texture
+	cardProg *prog
+	textProg *prog
+
 	tri       *trigo.TriGo
 	field     []trigo.Card
 	state     gameState
+	matches   int
 	candidate = map[int]struct{}{}
 
 	transitionTicker *time.Ticker
 	transitionStart  time.Time
 	transitionParam  float32
 
-	glctx gl.Context
-
-	fontTex gl.Texture
-
-	cardProg *prog
-	textProg *prog
-
 	cardShape = shape{verts: cardVerts}
-
 	charShape = shape{verts: charVerts}
 	fontShape shape
 
@@ -99,11 +184,11 @@ var (
 	selectColor  = []float32{0, 1, 1, 0.25}
 	invalidColor = []float32{1, 0, 0, 0.25}
 	textColor    = []float32{0, 1, 1, 1}
-
-	siz size.Event
-
-	matches int
 )
+
+type TransitionEvent struct {
+	T float32
+}
 
 type prog struct {
 	p gl.Program
@@ -223,8 +308,8 @@ func setupTextProg() error {
 	}
 	fontTex = glctx.CreateTexture()
 	glctx.BindTexture(gl.TEXTURE_2D, fontTex)
-	glctx.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	glctx.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	glctx.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	glctx.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 	glctx.TexImage2D(gl.TEXTURE_2D, 0, 256, 256, gl.RGBA, gl.UNSIGNED_BYTE, fontImg.Pix)
 
 	fontVerts := []float32{}
@@ -262,9 +347,9 @@ func stop() {
 	}
 
 	glctx.DeleteProgram(textProg.p)
-	glctx.DeleteTexture(fontTex)
 	glctx.DeleteBuffer(charShape.buf)
 	glctx.DeleteBuffer(fontShape.buf)
+	glctx.DeleteTexture(fontTex)
 }
 
 func handleTouch(evt touch.Event) {
@@ -378,10 +463,10 @@ func updateState() {
 }
 
 func mat4ToSlice(mat *f32.Mat4) []float32 {
-	s := []float32{}
+	s := make([]float32, 4*4)
 	for i := range mat {
 		for j := range mat[i] {
-			s = append(s, mat[j][i])
+			s[4*i+j] = mat[j][i]
 		}
 	}
 	return s
@@ -513,13 +598,13 @@ func draw() {
 	textMat := mat
 
 	textMat.Translate(&textMat, -0.5*fw, 0.5*fh, 0)
-	textMat.Scale(&textMat, w/charsPerRow, h/charsPerRow, 1)
+	textMat.Scale(&textMat, w/charsPerRow, w/charsPerRow, 1)
 	textMat.Translate(&textMat, 0.0, 0.5, 1)
 	drawText(fmt.Sprintf("DECK: %d", tri.DeckSize()), textMat, textColor)
 
 	textMat = mat
 	textMat.Translate(&textMat, -0.5*fw, -0.5*fh, 0)
-	textMat.Scale(&textMat, w/charsPerRow, h/charsPerRow, 1)
+	textMat.Scale(&textMat, w/charsPerRow, w/charsPerRow, 1)
 	textMat.Translate(&textMat, 0.0, -1.5, 1)
 	drawText(fmt.Sprintf("MATCHES: %d", matches), textMat, textColor)
 
@@ -549,93 +634,3 @@ func drawText(text string, mat f32.Mat4, color []float32) {
 	glctx.DisableVertexAttribArray(textProg.a["pos"])
 	glctx.DisableVertexAttribArray(textProg.a["texCoords"])
 }
-
-var cardVerts = []float32{
-	0, 0, 0,
-	1, 0, 0,
-	1, cardAspRat, 0,
-	0, cardAspRat, 0,
-}
-
-var sec30 = float32(2 / math.Sqrt(3))
-
-var squareVerts = []float32{
-	-1, -1, 0,
-	1, -1, 0,
-	1, 1, 0,
-	-1, 1, 0,
-}
-
-var triVerts = []float32{
-	-sec30, -1, 0,
-	0, 1, 0,
-	sec30, -1, 0,
-}
-
-var hexVerts = []float32{
-	-0.5 * sec30, -1, 0,
-	-sec30, 0, 0,
-	-0.5 * sec30, 1, 0,
-	0.5 * sec30, 1, 0,
-	sec30, 0, 0,
-	0.5 * sec30, -1, 0,
-}
-
-var charVerts = []float32{
-	0, 0, 0,
-	1, 0, 0,
-	1, 1, 0,
-	0, 1, 0,
-}
-
-const cardVertShader = `
-	#version 100
-	uniform mat4 mat;
-
-	attribute vec4 pos;
-	void main() {
-		gl_Position = mat * pos;
-	}`
-
-const cardFragShader = `
-	#version 100
-	precision mediump float;
-
-	uniform vec4 color;
-	uniform int shading;
-
-	void main() {
-		if (shading == 0) {
-			discard;
-		}
-		if (shading == 1) {
-			if (mod((gl_FragCoord.x + gl_FragCoord.y) / 8.0, 2.0) < 1.0) {
-				discard;
-			}
-		}
-		gl_FragColor = color;
-	}`
-
-const textVertShader = `
-	#version 100
-	uniform mat4 mat;
-	attribute vec2 texCoords;
-	varying vec2 fragTexCoord;
-	attribute vec4 pos;
-
-	void main() {
-		fragTexCoord = texCoords;
-		gl_Position = mat * pos;
-	}`
-
-const textFragShader = `
-	#version 100
-	precision mediump float;
-
-	uniform sampler2D tex;
-	uniform vec4 color;
-	varying vec2 fragTexCoord;
-
-	void main() {
-		gl_FragColor = color * texture2D(tex, fragTexCoord);
-	} `
