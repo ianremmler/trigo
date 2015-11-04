@@ -25,7 +25,7 @@ import (
 
 const (
 	cardAspRat     = 1.4
-	transitionTime = 1  // seconds
+	transitionTime = 1 * time.Second
 	transitionRate = 30 // fps
 	charsPerRow    = 16
 	stateFile      = "/data/data/org.remmler.TriGo/state"
@@ -420,19 +420,12 @@ func startTransition(newState gameState) {
 
 func transition() {
 	transitionTicker = time.NewTicker(time.Second / transitionRate)
-	for {
-		<-transitionTicker.C
-		delta := float32(time.Now().Sub(transitionStart).Seconds())
-		t := delta / transitionTime
-		done := t >= 1
-		if done {
-			transitionTicker.Stop()
-		}
-		ap.Send(TransitionEvent{t})
-		if done {
-			return
-		}
+	for elapsed := 0 * time.Second; elapsed <= transitionTime; {
+		now := <-transitionTicker.C
+		elapsed = now.Sub(transitionStart)
+		ap.Send(TransitionEvent{float32(elapsed) / float32(transitionTime)})
 	}
+	transitionTicker.Stop()
 }
 
 func updateState() {
