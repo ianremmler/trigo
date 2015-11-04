@@ -258,6 +258,7 @@ func start() {
 	}
 	field = tri.Field()
 	deckSize = tri.DeckSize()
+	matches = tri.MatchesFound()
 
 	glctx.Enable(gl.BLEND)
 	glctx.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
@@ -392,11 +393,11 @@ func updateCandidate(idx int) {
 		return
 	}
 	// still here... we got a match!
-	matches++
 	newState := match
 	tri.Remove(check)
+	matches = tri.MatchesFound()
 	tri.Deal()
-	if tri.NumMatches() == 0 {
+	if tri.FieldMatches() == 0 {
 		// we won!  play again...
 		newState = win
 		tri.Shuffle()

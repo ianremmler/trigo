@@ -16,13 +16,14 @@ type Card struct {
 
 // gameState represents a complete game state.
 type gameState struct {
-	NumAttrs    int
-	NumAttrVals int
-	FieldSize   int
-	FieldExpand int
-	Cards       []Card
-	Deck        []int
-	Field       []int
+	NumAttrs     int
+	NumAttrVals  int
+	FieldSize    int
+	FieldExpand  int
+	Cards        []Card
+	Deck         []int
+	Field        []int
+	MatchesFound int
 }
 
 // TriGo represents an instance of a game and its state.
@@ -118,15 +119,23 @@ func (t *TriGo) Shuffle() {
 	for i := range t.state.Field {
 		t.state.Field[i] = -1
 	}
+	t.state.MatchesFound = 0
 }
 
 // Remove removes a match from the field.
+// Match is not verified.  Use IsMatch() to check.
 func (t *TriGo) Remove(match []int) {
 	for _, i := range match {
 		if i >= 0 && i < len(t.state.Field) {
 			t.state.Field[i] = -1
 		}
 	}
+	t.state.MatchesFound++
+}
+
+// MatchesFound returns the number of matches found in the current game
+func (t *TriGo) MatchesFound() int {
+	return t.state.MatchesFound
 }
 
 // expandField adds new card slots to the field.
@@ -178,7 +187,7 @@ func (t *TriGo) addCards() {
 func (t *TriGo) Deal() {
 	t.tidyField()
 	t.addCards()
-	if t.NumMatches() == 0 && len(t.state.Deck) > 0 {
+	if t.FieldMatches() == 0 && len(t.state.Deck) > 0 {
 		t.expandField()
 		t.addCards()
 	}
@@ -226,8 +235,8 @@ func (t *TriGo) IsMatch(candidate []int) bool {
 	return true
 }
 
-// NumMatches returns the number of matches in the field.
-func (t *TriGo) NumMatches() int {
+// FieldMatches returns the number of matches in the field.
+func (t *TriGo) FieldMatches() int {
 	numMatches := 0
 	candidate := make([]int, t.state.NumAttrVals)
 
