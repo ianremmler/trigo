@@ -170,6 +170,7 @@ var (
 	field     []trigo.Card
 	state     gameState
 	matches   int
+	deckSize  int
 	candidate = map[int]struct{}{}
 
 	transitionTicker *time.Ticker
@@ -258,6 +259,7 @@ func start() {
 		tri.Deal()
 	}
 	field = tri.Field()
+	deckSize = tri.DeckSize()
 
 	glctx.Enable(gl.BLEND)
 	glctx.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
@@ -398,7 +400,6 @@ func updateCandidate(idx int) {
 	tri.Deal()
 	if tri.NumMatches() == 0 {
 		// we won!  play again...
-		matches = 0
 		newState = win
 		tri.Shuffle()
 		tri.Deal()
@@ -443,8 +444,11 @@ func updateState() {
 	field = tri.Field()
 	switch state {
 	case match:
+		deckSize = tri.DeckSize()
 		startTransition(deal)
 	case win:
+		matches = 0
+		deckSize = tri.DeckSize()
 		startTransition(newGame)
 	default:
 		state = play
@@ -600,7 +604,7 @@ func draw() {
 	textMat.Translate(&textMat, -0.5*fw, 0.5*fh, 0)
 	textMat.Scale(&textMat, w/charsPerRow, w/charsPerRow, 1)
 	textMat.Translate(&textMat, 0.0, 0.5, 1)
-	drawText(fmt.Sprintf("DECK: %d", tri.DeckSize()), textMat, textColor)
+	drawText(fmt.Sprintf("DECK: %d", deckSize), textMat, textColor)
 
 	textMat = mat
 	textMat.Translate(&textMat, -0.5*fw, -0.5*fh, 0)
