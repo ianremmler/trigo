@@ -413,18 +413,16 @@ func startTransition(newState gameState) {
 
 	state = newState
 	transitionParam = 0.0
-	go transition()
-}
-
-func transition() {
-	startTime := time.Now()
-	tick := time.NewTicker(time.Second / transitionRate)
-	for elapsed := 0 * time.Second; elapsed < transitionTime; {
-		now := <-tick.C
-		elapsed = now.Sub(startTime)
-		ap.Send(TransitionEvent{float32(elapsed) / float32(transitionTime)})
-	}
-	tick.Stop()
+	go func() {
+		startTime := time.Now()
+		tick := time.NewTicker(time.Second / transitionRate)
+		for elapsed := 0 * time.Second; elapsed < transitionTime; {
+			now := <-tick.C
+			elapsed = now.Sub(startTime)
+			ap.Send(TransitionEvent{float32(elapsed) / float32(transitionTime)})
+		}
+		tick.Stop()
+	}()
 }
 
 func updateState() {
