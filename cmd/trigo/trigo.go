@@ -82,7 +82,7 @@ func play() {
 		if tri.IsMatch(candidate) {
 			tri.Remove(candidate)
 			tri.Deal()
-			if tri.NumMatches() == 0 {
+			if tri.FieldMatches() == 0 {
 				fmt.Println("You found all the matches!  Let's play again.\n")
 				matchesFound = 0
 				tri.Shuffle()
