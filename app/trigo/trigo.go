@@ -65,6 +65,7 @@ const (
 	match
 	deal
 	win
+	endGame
 	newGame
 )
 
@@ -354,12 +355,24 @@ func stop() {
 }
 
 func handleTouch(evt touch.Event) {
-	if evt.Type != touch.TypeEnd || state != play {
+	if evt.Type != touch.TypeEnd {
 		return
 	}
 
-	w, h, fw, fh := viewDims()
+	switch state {
+	case play:
+	case endGame:
+		if transitionParam >= 1 {
+			startTransition(newGame)
+		}
+		return
+	default:
+		return
+	}
+
 	rows, cols := 3, len(field)/3
+	fw, fh := float32(rows)*cardAspRat, float32(cols)
+	w, h := fitAreaDims(fw, fh)
 	s := float32(evt.X) / float32(siz.WidthPx)       // x fraction across display
 	t := float32(evt.Y) / float32(siz.HeightPx)      // y fraction across display
 	marginX, marginY := 0.5*(w-fw)/fw, 0.5*(h-fh)/fh // "letterbox", if any
@@ -398,7 +411,7 @@ func updateCandidate(idx int) {
 	matches = tri.MatchesFound()
 	tri.Deal()
 	if tri.FieldMatches() == 0 {
-		// we won!  play again...
+		// we won!
 		newState = win
 		tri.Shuffle()
 		tri.Deal()
@@ -439,7 +452,8 @@ func updateState() {
 	case win:
 		matches = 0
 		deckSize = tri.DeckSize()
-		startTransition(newGame)
+		startTransition(endGame)
+	case endGame:
 	default:
 		state = play
 		candidate = map[int]struct{}{}
@@ -523,29 +537,38 @@ func drawCard(mat *f32.Mat4, card *trigo.Card, st cardState) {
 	glctx.DisableVertexAttribArray(cardProg.a["pos"])
 }
 
-// viewDims returns the display width/height and field width/height in units
-// based on the width of a card.
-func viewDims() (float32, float32, float32, float32) {
-	cols := len(field) / 3
-	fieldWidth, fieldHeight := float32(cols), float32(3*cardAspRat)
-	fieldAspRat := fieldWidth / fieldHeight
+// fitAreaDims returns the view dimensions that will maximally contain the
+// given area.
+func fitAreaDims(areaWidth, areaHeight float32) (float32, float32) {
+	areaAspRat := areaWidth / areaHeight
 	dispAspRat := float32(siz.WidthPx) / float32(siz.HeightPx)
 
-	width, height := fieldWidth, fieldHeight
+	width, height := areaWidth, areaHeight
 	// add letterboxing to preserve aspect ratio
-	if dispAspRat > fieldAspRat {
-		width = fieldHeight * dispAspRat
+	if dispAspRat > areaAspRat {
+		width = areaHeight * dispAspRat
 	} else {
-		height = fieldWidth / dispAspRat
+		height = areaWidth / dispAspRat
 	}
-	return width, height, fieldWidth, fieldHeight
+	return width, height
 }
 
 func draw() {
 	glctx.ClearColor(0, 0, 0, 0)
 	glctx.Clear(gl.COLOR_BUFFER_BIT)
 
-	w, h, fw, fh := viewDims()
+	switch state {
+	case endGame:
+		drawEnd()
+	default:
+		drawField()
+	}
+	ap.Publish()
+}
+
+func drawField() {
+	fw, fh := float32(len(field)/3), float32(3*cardAspRat)
+	w, h := fitAreaDims(fw, fh)
 	mat := f32.Mat4{}
 	mat.Identity()
 	mat.Scale(&mat, 1.0/(0.5*w), 1.0/(0.5*h), 1)
@@ -590,19 +613,41 @@ func draw() {
 	}
 
 	textMat := mat
+	color := append([]float32(nil), textColor...)
+	switch state {
+	case newGame:
+		color[3] = transitionParam
+	case win:
+		color[3] = 1 - transitionParam
+	}
 
 	textMat.Translate(&textMat, -0.5*fw, 0.5*fh, 0)
 	textMat.Scale(&textMat, w/charsPerRow, w/charsPerRow, 1)
 	textMat.Translate(&textMat, 0.0, 0.5, 1)
-	drawText(fmt.Sprintf("DECK: %d", deckSize), textMat, textColor)
+	drawText(fmt.Sprintf("DECK: %d", deckSize), textMat, color)
 
 	textMat = mat
 	textMat.Translate(&textMat, -0.5*fw, -0.5*fh, 0)
 	textMat.Scale(&textMat, w/charsPerRow, w/charsPerRow, 1)
 	textMat.Translate(&textMat, 0.0, -1.5, 1)
-	drawText(fmt.Sprintf("MATCHES: %d", matches), textMat, textColor)
+	drawText(fmt.Sprintf("MATCHES: %d", matches), textMat, color)
+}
 
-	ap.Publish()
+func drawEnd() {
+	msg := []string{"YOU", "DID", "IT!"}
+	w, h := fitAreaDims(3.0, 3.0) // 3 chars per line, 3 lines
+	mat := f32.Mat4{}
+	mat.Identity()
+	mat.Scale(&mat, 1.0/(0.5*w), 1.0/(0.5*h), 1)
+	mat.Translate(&mat, -1.5, 0.5, 0)
+	// mat.Scale(&mat, 0.5/3, 0.5/3, 1)
+	for i := range msg {
+		textMat := mat
+		textMat.Translate(&textMat, 0, float32(-i), 0)
+		color := append([]float32(nil), textColor...)
+		color[3] = transitionParam
+		drawText(msg[i], textMat, color)
+	}
 }
 
 // drawText draws text in the position and orientation defined by mat
