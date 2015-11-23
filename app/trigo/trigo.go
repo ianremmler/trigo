@@ -439,7 +439,7 @@ func startTransition(newState gameState) {
 }
 
 func updateState() {
-	if state == play {
+	if state == play || state == endGame {
 		return
 	}
 
@@ -453,7 +453,6 @@ func updateState() {
 		matches = 0
 		deckSize = tri.DeckSize()
 		startTransition(endGame)
-	case endGame:
 	default:
 		state = play
 		candidate = map[int]struct{}{}
