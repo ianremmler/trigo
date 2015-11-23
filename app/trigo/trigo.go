@@ -65,7 +65,8 @@ const (
 	match
 	deal
 	win
-	endGame
+	endGameIn
+	endGameOut
 	newGame
 )
 
@@ -361,11 +362,10 @@ func handleTouch(evt touch.Event) {
 
 	switch state {
 	case play:
-	case endGame:
+	case endGameIn:
 		if transitionParam >= 1 {
-			startTransition(newGame)
+			startTransition(endGameOut)
 		}
-		return
 	default:
 		return
 	}
@@ -452,8 +452,10 @@ func updateState() {
 	case win:
 		matches = 0
 		deckSize = tri.DeckSize()
-		startTransition(endGame)
-	case endGame:
+		startTransition(endGameIn)
+	case endGameIn:
+	case endGameOut:
+		startTransition(newGame)
 	default:
 		state = play
 		candidate = map[int]struct{}{}
@@ -558,7 +560,7 @@ func draw() {
 	glctx.Clear(gl.COLOR_BUFFER_BIT)
 
 	switch state {
-	case endGame:
+	case endGameIn, endGameOut:
 		drawEnd()
 	default:
 		drawField()
@@ -640,12 +642,14 @@ func drawEnd() {
 	mat.Identity()
 	mat.Scale(&mat, 1.0/(0.5*w), 1.0/(0.5*h), 1)
 	mat.Translate(&mat, -1.5, 0.5, 0)
-	// mat.Scale(&mat, 0.5/3, 0.5/3, 1)
 	for i := range msg {
 		textMat := mat
 		textMat.Translate(&textMat, 0, float32(-i), 0)
 		color := append([]float32(nil), textColor...)
 		color[3] = transitionParam
+		if state == endGameOut {
+			color[3] = 1 - transitionParam
+		}
 		drawText(msg[i], textMat, color)
 	}
 }
