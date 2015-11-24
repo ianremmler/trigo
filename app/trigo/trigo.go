@@ -366,6 +366,7 @@ func handleTouch(evt touch.Event) {
 		if transitionParam >= 1 {
 			startTransition(endGameOut)
 		}
+		return
 	default:
 		return
 	}
