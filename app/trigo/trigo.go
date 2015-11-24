@@ -26,7 +26,7 @@ import (
 const (
 	cardAspRat     = 1.4
 	transitionTime = 1 * time.Second
-	transitionRate = 30 // fps
+	transitionRate = 60 // fps
 	charsPerRow    = 16
 	stateFile      = "/data/data/org.remmler.TriGo/state"
 )
@@ -638,9 +638,15 @@ func drawField() {
 func drawEnd() {
 	msg := []string{"YOU", "DID", "IT!"}
 	w, h := fitAreaDims(3.0, 3.0) // 3 chars per line, 3 lines
+
+	zoom := float32(math.Pow(float64(transitionParam), 1/math.E))
+	if state == endGameOut {
+		zoom = 1 + float32(math.Pow(float64(transitionParam), math.E))
+	}
+
 	mat := f32.Mat4{}
 	mat.Identity()
-	mat.Scale(&mat, 1.0/(0.5*w), 1.0/(0.5*h), 1)
+	mat.Scale(&mat, zoom/(0.5*w), zoom/(0.5*h), 1)
 	mat.Translate(&mat, -1.5, 0.5, 0)
 	for i := range msg {
 		textMat := mat
