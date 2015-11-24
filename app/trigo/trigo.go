@@ -110,9 +110,10 @@ var charVerts = []float32{
 
 const cardVertShader = `
 	#version 100
-	uniform mat4 mat;
 
+	uniform mat4 mat;
 	attribute vec4 pos;
+
 	void main() {
 		gl_Position = mat * pos;
 	}`
@@ -138,6 +139,7 @@ const cardFragShader = `
 
 const textVertShader = `
 	#version 100
+
 	uniform mat4 mat;
 	attribute vec2 texCoords;
 	varying vec2 fragTexCoord;
