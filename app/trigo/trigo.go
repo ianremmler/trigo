@@ -25,6 +25,7 @@ import (
 
 const (
 	cardAspRat     = 1.4
+	cardBorder     = 0.02
 	transitionTime = 1 * time.Second
 	transitionRate = 60 // fps
 	charsPerRow    = 16
@@ -428,7 +429,7 @@ func startTransition(newState gameState) {
 	}
 
 	state = newState
-	transitionParam = 0.0
+	transitionParam = 0
 	go func() {
 		startTime := time.Now()
 		tick := time.NewTicker(time.Second / transitionRate)
@@ -576,7 +577,7 @@ func drawField() {
 	w, h := fitAreaDims(fw, fh)
 	mat := f32.Mat4{}
 	mat.Identity()
-	mat.Scale(&mat, 1.0/(0.5*w), 1.0/(0.5*h), 1)
+	mat.Scale(&mat, 2/w, 2/h, 1)
 
 	st := normal
 	switch state {
@@ -596,7 +597,7 @@ func drawField() {
 		cardMat.Translate(&cardMat, x-0.5*fw, y-0.5*fh, 0)
 		// shrink just a bit to separate cards
 		cardMat.Translate(&cardMat, 0.5, 0.5*cardAspRat, 0)
-		cardMat.Scale(&cardMat, 1.0-0.02*cardAspRat, 1.0-0.02, 1)
+		cardMat.Scale(&cardMat, 1-cardBorder*cardAspRat, 1-cardBorder, 1)
 		cardMat.Translate(&cardMat, -0.5, -0.5*cardAspRat, 0)
 
 		cardSt := st
@@ -628,23 +629,23 @@ func drawField() {
 
 	textMat.Translate(&textMat, -0.5*fw, 0.5*fh, 0)
 	textMat.Scale(&textMat, w/charsPerRow, w/charsPerRow, 1)
-	textMat.Translate(&textMat, 0.0, 0.5, 1)
+	textMat.Translate(&textMat, 0, 0.5, 1)
 	drawText(fmt.Sprintf("DECK: %d", deckSize), textMat, color)
 
 	textMat = mat
 	textMat.Translate(&textMat, -0.5*fw, -0.5*fh, 0)
 	textMat.Scale(&textMat, w/charsPerRow, w/charsPerRow, 1)
-	textMat.Translate(&textMat, 0.0, -1.5, 1)
+	textMat.Translate(&textMat, 0, -1.5, 1)
 	drawText(fmt.Sprintf("MATCHES: %d", matches), textMat, color)
 }
 
 func drawEnd() {
 	msg := []string{"YOU", "DID", "IT!"}
-	w, h := fitAreaDims(3.0, 3.0) // 3 chars per line, 3 lines
+	w, h := fitAreaDims(3, 3) // 3 chars per line, 3 lines
 
-	zoom := float32(math.Pow(float64(transitionParam), 1/math.E))
+	zoom := transitionParam
 	if state == endGameOut {
-		zoom = 1 + float32(math.Pow(float64(transitionParam), math.E))
+		zoom += 1
 	}
 
 	mat := f32.Mat4{}
@@ -681,7 +682,7 @@ func drawText(text string, mat f32.Mat4, color []float32) {
 		glctx.VertexAttribPointer(textProg.a["texCoords"], 2, gl.FLOAT, false, 0, int(c)*32)
 		glctx.UniformMatrix4fv(textProg.u["mat"], mat4ToSlice(&mat))
 		glctx.DrawArrays(gl.TRIANGLE_FAN, 0, len(charShape.verts)/3)
-		mat.Translate(&mat, 1.0, 0.0, 0.0)
+		mat.Translate(&mat, 1, 0, 0)
 	}
 	glctx.DisableVertexAttribArray(textProg.a["pos"])
 	glctx.DisableVertexAttribArray(textProg.a["texCoords"])
